@@ -1,6 +1,6 @@
 %define package_name mesa
 %global build_branch master
-%bcond_with patented_video_codecs 1
+%bcond_without patented_video_codecs 0
 %global _default_patch_fuzz 2
 #global __meson_auto_features disabled
 
