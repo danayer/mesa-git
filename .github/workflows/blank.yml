@@ -2,7 +2,7 @@ name: Update Mesa.spec
 
 on:
   schedule:
-    - cron: "0 */3 * * *" # Запуск каждые 3 часа
+    - cron: "0 * * * *" # Запуск каждый час
   workflow_dispatch: # Ручной запуск
 
 jobs:
@@ -32,19 +32,12 @@ jobs:
         sed -i "s/^%define commit .*/%define commit ${COMMIT}/" mesa.spec
         sed -i "s/^%global commit_date .*/%global commit_date ${COMMIT_DATE}/" mesa.spec
 
-    - name: Clean up temporary files
-      run: rm -f latest_commit.json
-
     - name: Commit and push changes
       run: |
         git config --global user.name "GitHub Actions"
         git config --global user.email "actions@github.com"
         git add mesa.spec
-        if git diff --cached --quiet; then
-          echo "No changes to commit."
-        else
-          git commit -m "Update mesa.spec to commit $COMMIT and date $COMMIT_DATE"
-          git push origin HEAD:${{ github.ref_name }}
-        fi
+        git commit -m "Update mesa.spec to commit $COMMIT and date $COMMIT_DATE"
+        git push origin HEAD:${{ github.ref_name }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
