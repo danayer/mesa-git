@@ -23,7 +23,7 @@ jobs:
     - name: Extract commit and date
       run: |
         COMMIT=$(jq -r '.commit' latest_commit.json)
-        COMMIT_DATE=$(jq -r '.date' latest_commit.json | sed 's/[-:]//g; s/T/./g' | cut -c 1-12)
+        COMMIT_DATE=$(jq -r '.date' latest_commit.json | sed 's/[-:]//g; s/T/./g' | cut -c 1-13)
         echo "COMMIT=$COMMIT" >> $GITHUB_ENV
         echo "COMMIT_DATE=$COMMIT_DATE" >> $GITHUB_ENV
 
