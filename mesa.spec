@@ -469,7 +469,7 @@ export MESON_PACKAGE_CACHE_DIR="%{cargo_registry}/"
   -Dglx-read-only-text=true \
 %endif
 %if %{with videocodecs}
-  -Dvideo-codecs=h264dec,h264enc,h265dec,h265enc,vc1dec \
+  -Dvideo-codecs=all \
 %endif
   %{nil}
 %meson_build
