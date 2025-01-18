@@ -16,14 +16,15 @@ jobs:
     - name: Get latest commit from GitLab
       run: |
         curl -s "https://gitlab.freedesktop.org/api/v4/projects/mesa%2Fmesa/repository/commits" \
-        | jq -r '.[0].id' > latest_commit.txt
+        | jq -r '.[0] | {commit: .id, date: .created_at}' > latest_commit.json
       env:
         GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
 
     - name: Update mesa.spec
       run: |
-        COMMIT=$(cat latest_commit.txt)
-        SHORTCOMMIT=${COMMIT:0:7}
+        COMMIT=$(jq -r '.commit' latest_commit.json)
+        DATE=$(jq -r '.date' latest_commit.json | sed 's/T/./g' | cut -d'.' -f1 | sed 's/-//g')
+        SHORTCOMMIT="$(echo ${COMMIT} | cut -c1-7).${DATE}"
         sed -i "s/^%global commit .*/%global commit ${COMMIT}/" mesa.spec
         sed -i "s/^%global shortcommit .*/%global shortcommit ${SHORTCOMMIT}/" mesa.spec
 
@@ -35,8 +36,9 @@ jobs:
         if git diff-index --quiet HEAD; then
           echo "No changes to commit."
         else
-          COMMIT=$(cat latest_commit.txt)
-          SHORTCOMMIT=${COMMIT:0:7}
+          COMMIT=$(jq -r '.commit' latest_commit.json)
+          DATE=$(jq -r '.date' latest_commit.json | sed 's/T/./g' | cut -d'.' -f1 | sed 's/-//g')
+          SHORTCOMMIT="$(echo ${COMMIT} | cut -c1-7).${DATE}"
           git commit -m "Update mesa.spec to commit ${COMMIT} (${SHORTCOMMIT})"
           git push origin HEAD:${{ github.ref_name }}
         fi
@@ -44,4 +46,4 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Clean up temporary files
-      run: rm -f latest_commit.txt
+      run: rm -f latest_commit.json
