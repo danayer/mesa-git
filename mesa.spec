@@ -73,7 +73,7 @@
 %global with_gallium_extra_hud 1
 
 %global commit 70767b9cd47df498ed510ec63becd67649518b7f
-%global shortcommit 70767b9.20250118.
+%global shortcommit 70767b9.20250118
 
 Name:           mesa
 Summary:        Mesa graphics libraries
