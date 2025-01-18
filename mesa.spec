@@ -1,4 +1,4 @@
-%bcond_with videocodecs
+%bcond_without videocodecs
 %global source_date_epoch_from_changelog 0
 
 %ifnarch s390x
