@@ -74,7 +74,6 @@
 
 %global commit 70767b9cd47df498ed510ec63becd67649518b7f
 %global shortcommit 70767b9
-%global build_repo https://gitlab.freedesktop.org/mesa/mesa
 
 Name:           mesa
 Summary:        Mesa graphics libraries
@@ -84,7 +83,7 @@ Release: 0.23.git%{shortcommit}%{?dist}
 License:        MIT AND BSD-3-Clause AND SGI-B-2.0
 URL:            http://www.mesa3d.org
 
-Source0:        %{build_repo}/-/archive/%{commit}.tar.gz#/mesa-%{commit}.tar.gz
+Source0:        https://gitlab.freedesktop.org/mesa/mesa/-/archive/%{commit}.tar.gz#/mesa-%{commit}.tar.gz
 # src/gallium/auxiliary/postprocess/pp_mlaa* have an ... interestingly worded license.
 # Source1 contains email correspondence clarifying the license terms.
 # Fedora opts to ignore the optional part of clause 2 and treat that code as 2 clause BSD.
