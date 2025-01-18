@@ -23,8 +23,9 @@ jobs:
     - name: Update mesa.spec
       run: |
         COMMIT=$(jq -r '.commit' latest_commit.json)
-        FULLDATE=$(jq -r '.date' latest_commit.json | sed 's/-//g' | sed 's/://' | sed 's/T/./g' | cut -d'.' -f1)
-        SHORTCOMMIT="$(echo ${COMMIT} | cut -c1-7).${FULLDATE}"
+        DATE=$(jq -r '.date' latest_commit.json | sed 's/-//g' | cut -c1-8)
+        CURRENT_TIME=$(date +"%H%M")
+        SHORTCOMMIT="$(echo ${COMMIT} | cut -c1-7).${DATE}.${CURRENT_TIME}"
         sed -i "s/^%global commit .*/%global commit ${COMMIT}/" mesa.spec
         sed -i "s/^%global shortcommit .*/%global shortcommit ${SHORTCOMMIT}/" mesa.spec
 
@@ -37,8 +38,9 @@ jobs:
           echo "No changes to commit."
         else
           COMMIT=$(jq -r '.commit' latest_commit.json)
-          FULLDATE=$(jq -r '.date' latest_commit.json | sed 's/-//g' | sed 's/://' | sed 's/T/./g' | cut -d'.' -f1)
-          SHORTCOMMIT="$(echo ${COMMIT} | cut -c1-7).${FULLDATE}"
+          DATE=$(jq -r '.date' latest_commit.json | sed 's/-//g' | cut -c1-8)
+          CURRENT_TIME=$(date +"%H%M")
+          SHORTCOMMIT="$(echo ${COMMIT} | cut -c1-7).${DATE}.${CURRENT_TIME}"
           git commit -m "Update mesa.spec to commit ${COMMIT} (${SHORTCOMMIT})"
           git push origin HEAD:${{ github.ref_name }}
         fi
