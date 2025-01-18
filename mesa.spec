@@ -72,8 +72,8 @@
 %global with_vulkan_overlay 1
 %global with_gallium_extra_hud 1
 
-%global commit c84b1dda0bd68fb3b78b6332f2236f4945e5b08b
-%global shortcommit %(c=%{commit}; echo ${c:0:7})
+%global commit 70767b9cd47df498ed510ec63becd67649518b7f
+%global shortcommit 70767b9
 
 Name:           mesa
 Summary:        Mesa graphics libraries
