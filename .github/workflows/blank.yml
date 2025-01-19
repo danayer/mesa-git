@@ -2,7 +2,7 @@ name: Update Mesa.spec
 
 on:
   schedule:
-    - cron: "0 */5 * * *" # Запуск каждые 5 часа
+    - cron: "0 */5 * * *" # Запуск каждые 3 часа
   workflow_dispatch: # Ручной запуск
 
 jobs:
@@ -29,13 +29,13 @@ jobs:
         sed -i "s/^%global commit .*/%global commit ${COMMIT}/" mesa.spec
         sed -i "s/^%global shortcommit .*/%global shortcommit ${SHORTCOMMIT}/" mesa.spec
         
-        # Extract and increment release number
-        RELEASE_LINE=$(grep "^Release:" mesa.spec)
-        CURRENT_NUMBER=$(echo $RELEASE_LINE | grep -o '[0-9]\+\.git' | cut -d'.' -f1)
+        # Find and increment the release number
+        RELEASE_LINE=$(grep -E "^Release:" mesa.spec)
+        CURRENT_NUMBER=$(echo "$RELEASE_LINE" | grep -o '0\.[0-9]\+\.git' | cut -d'.' -f2)
         NEW_NUMBER=$((CURRENT_NUMBER + 1))
         
-        # Update release number
-        sed -i "s/Release: ${CURRENT_NUMBER}\.git/Release: ${NEW_NUMBER}\.git/" mesa.spec
+        # Update the release number
+        sed -i "s/Release: 0\.[0-9]\+\.git/Release: 0.${NEW_NUMBER}.git/" mesa.spec
 
     - name: Commit and push changes
       run: |
