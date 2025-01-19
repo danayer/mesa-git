@@ -35,9 +35,7 @@
 %global intel_platform_vulkan %{?with_vulkan_hw:,intel,intel_hasvk}%{!?with_vulkan_hw:%{nil}}
 %endif
 %ifarch x86_64
-%if !0%{?with_vulkan_hw}
 %global with_intel_vk_rt 1
-%endif
 %endif
 
 %ifarch aarch64 x86_64 %{ix86}
@@ -72,13 +70,13 @@
 %global with_vulkan_overlay 1
 %global with_gallium_extra_hud 1
 
-%global commit 7d41cfa1a97f29ad576a8f08c833ac1336c716e4
-%global shortcommit 7d41cfa
+%global commit d7d210fed43abd6e9763f9b3a91396cecb699fcb
+%global shortcommit d7d210f
 
 Name:           mesa
 Summary:        Mesa graphics libraries
 Version:        25.0.0
-Release: 0.24.git%{shortcommit}%{?dist}
+Release: 0.23.git%{shortcommit}%{?dist}
 
 License:        MIT AND BSD-3-Clause AND SGI-B-2.0
 URL:            http://www.mesa3d.org
