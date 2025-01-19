@@ -2,7 +2,7 @@ name: Update Mesa.spec
 
 on:
   schedule:
-    - cron: "0 */5 * * *" # Запуск каждые 3 часа
+    - cron: "0 */5 * * *" # Запуск каждые 5 часа
   workflow_dispatch: # Ручной запуск
 
 jobs:
@@ -24,8 +24,18 @@ jobs:
       run: |
         COMMIT=$(cat latest_commit.txt)
         SHORTCOMMIT=${COMMIT:0:7}
+        
+        # Update commit hashes
         sed -i "s/^%global commit .*/%global commit ${COMMIT}/" mesa.spec
         sed -i "s/^%global shortcommit .*/%global shortcommit ${SHORTCOMMIT}/" mesa.spec
+        
+        # Extract and increment release number
+        RELEASE_LINE=$(grep "^Release:" mesa.spec)
+        CURRENT_NUMBER=$(echo $RELEASE_LINE | grep -o '[0-9]\+\.git' | cut -d'.' -f1)
+        NEW_NUMBER=$((CURRENT_NUMBER + 1))
+        
+        # Update release number
+        sed -i "s/Release: ${CURRENT_NUMBER}\.git/Release: ${NEW_NUMBER}\.git/" mesa.spec
 
     - name: Commit and push changes
       run: |
@@ -37,7 +47,8 @@ jobs:
         else
           COMMIT=$(cat latest_commit.txt)
           SHORTCOMMIT=${COMMIT:0:7}
-          git commit -m "Update mesa.spec to commit ${COMMIT} (${SHORTCOMMIT})"
+          RELEASE_NUMBER=$(grep "^Release:" mesa.spec | grep -o '[0-9]\+\.git' | cut -d'.' -f1)
+          git commit -m "Update mesa.spec to commit ${COMMIT} (${SHORTCOMMIT}) and bump release to ${RELEASE_NUMBER}"
           git push origin HEAD:${{ github.ref_name }}
         fi
       env:
