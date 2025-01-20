@@ -70,7 +70,7 @@
 %global with_vulkan_overlay 1
 %global with_gallium_extra_hud 1
 
-%global commit bfa6b9b6551080422e9275d5585e0327e9dd27ad
+%global commit bfa6b9b6551080422e
 %global shortcommit bfa6b9b
 
 Name:           mesa
