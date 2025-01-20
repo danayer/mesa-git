@@ -2,7 +2,7 @@ name: Update Mesa.spec
 
 on:
   schedule:
-    - cron: "0 */5 * * *" # Запуск каждые 3 часа
+    - cron: "0 */5 * * *" # Запуск каждые 5 часа
   workflow_dispatch: # Ручной запуск
 
 jobs:
@@ -25,17 +25,23 @@ jobs:
         COMMIT=$(cat latest_commit.txt)
         SHORTCOMMIT=${COMMIT:0:7}
         
-        # Update commit hashes
-        sed -i "s/^%global commit .*/%global commit ${COMMIT}/" mesa.spec
-        sed -i "s/^%global shortcommit .*/%global shortcommit ${SHORTCOMMIT}/" mesa.spec
+        # Get current commit from spec file
+        CURRENT_COMMIT=$(grep "^%global commit" mesa.spec | awk '{print $3}')
         
-        # Find and increment the release number
-        RELEASE_LINE=$(grep -E "^Release:" mesa.spec)
-        CURRENT_NUMBER=$(echo "$RELEASE_LINE" | grep -o '0\.[0-9]\+\.git' | cut -d'.' -f2)
-        NEW_NUMBER=$((CURRENT_NUMBER + 1))
-        
-        # Update the release number
-        sed -i "s/Release: 0\.[0-9]\+\.git/Release: 0.${NEW_NUMBER}.git/" mesa.spec
+        # Only update if commit has changed
+        if [ "$COMMIT" != "$CURRENT_COMMIT" ]; then
+          # Update commit hashes
+          sed -i "s/^%global commit .*/%global commit ${COMMIT}/" mesa.spec
+          sed -i "s/^%global shortcommit .*/%global shortcommit ${SHORTCOMMIT}/" mesa.spec
+          
+          # Find and increment the release number
+          RELEASE_LINE=$(grep -E "^Release:" mesa.spec)
+          CURRENT_NUMBER=$(echo "$RELEASE_LINE" | grep -o '0\.[0-9]\+\.git' | cut -d'.' -f2)
+          NEW_NUMBER=$((CURRENT_NUMBER + 1))
+          
+          # Update the release number
+          sed -i "s/Release: 0\.[0-9]\+\.git/Release: 0.${NEW_NUMBER}.git/" mesa.spec
+        fi
 
     - name: Commit and push changes
       run: |
@@ -47,7 +53,7 @@ jobs:
         else
           COMMIT=$(cat latest_commit.txt)
           SHORTCOMMIT=${COMMIT:0:7}
-          RELEASE_NUMBER=$(grep "^Release:" mesa.spec | grep -o '[0-9]\+\.git' | cut -d'.' -f1)
+          RELEASE_NUMBER=$(grep "^Release:" mesa.spec | grep -o '0\.[0-9]\+\.git' | cut -d'.' -f1)
           git commit -m "Update mesa.spec to commit ${COMMIT} (${SHORTCOMMIT}) and bump release to ${RELEASE_NUMBER}"
           git push origin HEAD:${{ github.ref_name }}
         fi
