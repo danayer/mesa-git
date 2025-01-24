@@ -77,7 +77,7 @@
 Name:           mesa
 Summary:        Mesa graphics libraries
 Version:        25.0.0
-Release: 0.60.git%{shortcommit}%{?dist}
+Release: 0.61.git%{shortcommit}%{?dist}
 
 License:        MIT AND BSD-3-Clause AND SGI-B-2.0
 URL:            http://www.mesa3d.org
@@ -141,7 +141,7 @@ BuildRequires:  lm_sensors-devel
 BuildRequires:  pkgconfig(vdpau) >= 1.1
 %endif
 %if 0%{?with_d3d12}
-BuildRequires:  pkgconfig(DirectX-Headers) >= 1.615.1
+BuildRequires:  pkgconfig(DirectX-Headers) >= 1.610.1
 %endif
 %if 0%{?with_va}
 BuildRequires:  pkgconfig(libva) >= 0.38.0
