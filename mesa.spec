@@ -141,7 +141,7 @@ BuildRequires:  lm_sensors-devel
 BuildRequires:  pkgconfig(vdpau) >= 1.1
 %endif
 %if 0%{?with_d3d12}
-BuildRequires:  pkgconfig(directX-headers)
+BuildRequires:  pkgconfig(directx-headers)
 %endif
 %if 0%{?with_va}
 BuildRequires:  pkgconfig(libva) >= 0.38.0
