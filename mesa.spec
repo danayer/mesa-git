@@ -141,6 +141,7 @@ BuildRequires:  lm_sensors-devel
 BuildRequires:  pkgconfig(vdpau) >= 1.1
 %endif
 %if 0%{?with_d3d12}
+%define _dependency_resolution_flags --no-best
 BuildRequires:  pkgconfig(DirectX-Headers)
 %endif
 %if 0%{?with_va}
