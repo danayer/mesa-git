@@ -196,13 +196,13 @@ BuildRequires: glslang
 Summary:        Mesa driver filesystem
 Provides:       mesa-dri-filesystem = %{?epoch:%{epoch}:}%{version}-%{release}
 Obsoletes:      mesa-omx-drivers < %{?epoch:%{epoch}:}%{version}-%{release}
+Obsoletes:      mesa-libglapi < %{?epoch:%{epoch}:}%{version}-%{release}
 
 %description filesystem
 %{summary}.
 
 %package libGL
 Summary:        Mesa libGL runtime libraries
-Requires:       %{name}-libglapi%{?_isa} = %{?epoch:%{epoch}:}%{version}-%{release}
 Requires:       libglvnd-glx%{?_isa} >= 1:1.3.2
 Recommends:     %{name}-dri-drivers%{?_isa} = %{?epoch:%{epoch}:}%{version}-%{release}
 
@@ -224,7 +224,6 @@ Recommends:     gl-manpages
 Summary:        Mesa libEGL runtime libraries
 Requires:       libglvnd-egl%{?_isa} >= 1:1.3.2
 Requires:       %{name}-libgbm%{?_isa} = %{?epoch:%{epoch}:}%{version}-%{release}
-Requires:       %{name}-libglapi%{?_isa} = %{?epoch:%{epoch}:}%{version}-%{release}
 Recommends:     %{name}-dri-drivers%{?_isa} = %{?epoch:%{epoch}:}%{version}-%{release}
 
 %description libEGL
@@ -244,7 +243,6 @@ Provides:       libEGL-devel%{?_isa}
 %package dri-drivers
 Summary:        Mesa-based DRI drivers
 Requires:       %{name}-filesystem%{?_isa} = %{?epoch:%{epoch}:}%{version}-%{release}
-Requires:       %{name}-libglapi%{?_isa} = %{?epoch:%{epoch}:}%{version}-%{release}
 %if 0%{?with_va}
 Recommends:     %{name}-va-drivers%{?_isa}
 %endif
@@ -273,7 +271,6 @@ Requires:       %{name}-filesystem%{?_isa} = %{?epoch:%{epoch}:}%{version}-%{rel
 
 %package libOSMesa
 Summary:        Mesa offscreen rendering libraries
-Requires:       %{name}-libglapi%{?_isa} = %{?epoch:%{epoch}:}%{version}-%{release}
 Provides:       libOSMesa
 Provides:       libOSMesa%{?_isa}
 
@@ -327,18 +324,6 @@ Provides:       libxatracker-devel%{?_isa}
 %description libxatracker-devel
 %{summary}.
 %endif
-
-%package libglapi
-Summary:        Mesa shared glapi
-Provides:       libglapi
-Provides:       libglapi%{?_isa}
-# If mesa-dri-drivers are installed, they must match in version. This is here to prevent using
-# older mesa-dri-drivers together with a newer mesa-libglapi or its dependants.
-# See https://bugzilla.redhat.com/show_bug.cgi?id=2193135 .
-Requires:       (%{name}-dri-drivers%{?_isa} = %{?epoch:%{epoch}:}%{version}-%{release} if %{name}-dri-drivers%{?_isa})
-
-%description libglapi
-%{summary}.
 
 %if 0%{?with_opencl}
 %package libOpenCL
@@ -506,7 +491,6 @@ popd
 %dir %{_includedir}/GL/internal
 %{_includedir}/GL/internal/dri_interface.h
 %{_libdir}/pkgconfig/dri.pc
-%{_libdir}/libglapi.so
 
 %files libEGL
 %{_datadir}/glvnd/egl_vendor.d/50_mesa.json
@@ -515,10 +499,6 @@ popd
 %dir %{_includedir}/EGL
 %{_includedir}/EGL/eglext_angle.h
 %{_includedir}/EGL/eglmesaext.h
-
-%files libglapi
-%{_libdir}/libglapi.so.0
-%{_libdir}/libglapi.so.0.*
 
 %files libOSMesa
 %{_libdir}/libOSMesa.so.8*
