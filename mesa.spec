@@ -77,7 +77,7 @@
 Name:           mesa
 Summary:        Mesa graphics libraries
 Version:        25.0.0
-Release: 0.63.git%{shortcommit}%{?dist}
+Release: 0.64.git%{shortcommit}%{?dist}
 
 License:        MIT AND BSD-3-Clause AND SGI-B-2.0
 URL:            http://www.mesa3d.org
@@ -411,6 +411,7 @@ export MESON_PACKAGE_CACHE_DIR="%{cargo_registry}/"
   -Dosmesa=true \
 %if 0%{?with_hardware}
   -Dgallium-drivers=softpipe,llvmpipe,virgl%{?with_d3d12:,d3d12},nouveau%{?with_r300:,r300}%{?with_crocus:,crocus}%{?with_i915:,i915}%{?with_iris:,iris}%{?with_vmware:,svga}%{?with_radeonsi:,radeonsi}%{?with_r600:,r600}%{?with_freedreno:,freedreno}%{?with_etnaviv:,etnaviv}%{?with_tegra:,tegra}%{?with_vc4:,vc4}%{?with_v3d:,v3d}%{?with_lima:,lima}%{?with_panfrost:,panfrost}%{?with_vulkan_hw:,zink} \
+  -Dintel-clc-includes=%{_includedir}/clc \
 %else
   -Dgallium-drivers=softpipe,llvmpipe,virgl%{?with_d3d12:,d3d12} \
 %endif
