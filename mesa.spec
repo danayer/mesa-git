@@ -414,6 +414,8 @@ export MESON_PACKAGE_CACHE_DIR="%{cargo_registry}/"
 %else
   -Dgallium-drivers=softpipe,llvmpipe,virgl%{?with_d3d12:,d3d12} \
 %endif
+  -Dgallium-d3d12-video=enabled \
+  -Dgallium-d3d12-graphics=enabled \
   -Damdgpu-virtio=true \
   -Dgallium-vdpau=%{?with_vdpau:enabled}%{!?with_vdpau:disabled} \
   -Dgallium-va=%{?with_va:enabled}%{!?with_va:disabled} \
