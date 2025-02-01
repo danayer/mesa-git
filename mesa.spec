@@ -92,7 +92,7 @@ Source1:        Mesa-MLAA-License-Clarification-Email.txt
 
 Patch10:        gnome-shell-glthread-disable.patch
 Patch11:        NVK-LOAD-ZINK.patch
-Patch12:        NVK-Vulkan-Video-support.patch
+Patch12:        NAK-instr-scheduler.patch
 
 BuildRequires:  meson >= 1.5.0
 BuildRequires:  gcc
