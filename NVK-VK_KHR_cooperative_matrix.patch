@@ -1,0 +1,1606 @@
+diff --git a/src/compiler/nir/nir_divergence_analysis.c b/src/compiler/nir/nir_divergence_analysis.c
+index 3518569f51b1d25f69c1aee0e26f69c9096b0bbf..3af55ef4126d205c07f358a0719ffff00f4fef52 100644
+--- a/src/compiler/nir/nir_divergence_analysis.c
++++ b/src/compiler/nir/nir_divergence_analysis.c
+@@ -896,6 +896,7 @@ visit_intrinsic(nir_intrinsic_instr *instr, struct divergence_state *state)
+    case nir_intrinsic_ald_nv:
+    case nir_intrinsic_ipa_nv:
+    case nir_intrinsic_ldtram_nv:
++   case nir_intrinsic_cmat_muladd_nv:
+    case nir_intrinsic_printf:
+    case nir_intrinsic_load_gs_header_ir3:
+    case nir_intrinsic_load_tcs_header_ir3:
+diff --git a/src/compiler/nir/nir_intrinsics.py b/src/compiler/nir/nir_intrinsics.py
+index 1f9808ff5b55968d68b181d3c740f8ba42212d88..cd2011ce2f9c7ff7169b21f89995242badda42d6 100644
+--- a/src/compiler/nir/nir_intrinsics.py
++++ b/src/compiler/nir/nir_intrinsics.py
+@@ -2407,6 +2407,11 @@ intrinsic("bar_sync_nv", src_comp=[1, 1])
+ # Stall until the given SSA value is available
+ intrinsic("ssa_bar_nv", src_comp=[1])
+ 
++# NVIDIA-specific muladd intrinsics.
++# src[] = { a, b, c}
++intrinsic("cmat_muladd_nv", src_comp=[-1, -1, -1], dest_comp=0, bit_sizes=src2,
++          indices=[FLAGS], flags=[CAN_ELIMINATE])
++
+ # NVIDIA-specific system values
+ system_value("warps_per_sm_nv", 1, bit_sizes=[32])
+ system_value("sm_count_nv", 1, bit_sizes=[32])
+diff --git a/src/nouveau/compiler/meson.build b/src/nouveau/compiler/meson.build
+index a58ce0598f57babc625731273b30ee9d36803d1f..61a10bf7c1f13a6675bc5a47fa34c8418cb27f5f 100644
+--- a/src/nouveau/compiler/meson.build
++++ b/src/nouveau/compiler/meson.build
+@@ -26,6 +26,7 @@ libnak_c_files = files(
+   'nak.h',
+   'nak_nir.c',
+   'nak_nir_lower_cf.c',
++  'nak_nir_lower_cooperative_matrix.c',
+   'nak_nir_lower_fs_inputs.c',
+   'nak_nir_lower_gs_intrinsics.c',
+   'nak_nir_lower_non_uniform_ldcx.c',
+diff --git a/src/nouveau/compiler/nak/from_nir.rs b/src/nouveau/compiler/nak/from_nir.rs
+index f7fa2e28ea247b83ec7160bcf1a3922817a9f5be..778726bea30264d6003c645251f02de19e01092b 100644
+--- a/src/nouveau/compiler/nak/from_nir.rs
++++ b/src/nouveau/compiler/nak/from_nir.rs
+@@ -3133,6 +3133,68 @@ impl<'a> ShaderFromNir<'a> {
+                 let dst = b.isetp(IntCmpType::I32, IntCmpOp::Ne, src, 0.into());
+                 self.set_dst(&intrin.def, dst);
+             }
++            nir_intrinsic_cmat_muladd_nv => {
++                let flags: u32 = intrin.flags();
++                let flags: nak_nir_cmat_mul_add_flags =
++                    unsafe { std::mem::transmute_copy(&flags) };
++                let cmat_a = self.get_src(&srcs[0]);
++                let cmat_b = self.get_src(&srcs[1]);
++                let cmat_c = self.get_src(&srcs[2]);
++                let dst_bit_size = usize::from(intrin.def.bit_size());
++                let dst_num_components =
++                    usize::from(intrin.def.num_components());
++                let comps: u8 =
++                    ((dst_bit_size * dst_num_components) / 32) as u8;
++                let dst = b.alloc_ssa(RegFile::GPR, comps);
++                match flags.cmat_type() {
++                    NAK_CMAT_TYPE_M16N8K8 => {
++                        assert!(flags.a_type() as u32 == GLSL_TYPE_FLOAT16);
++                        b.push_op(OpHmma {
++                            dst: dst.into(),
++                            dst_type: FloatType::from_bits(dst_bit_size),
++                            mat_size: HmmaSize::M16N8K8,
++                            srcs: [cmat_a.into(), cmat_b.into(), cmat_c.into()],
++                        });
++                    }
++                    NAK_CMAT_TYPE_M16N8K16 => {
++                        assert!(flags.a_type() as u32 == GLSL_TYPE_FLOAT16);
++                        b.push_op(OpHmma {
++                            dst: dst.into(),
++                            dst_type: FloatType::from_bits(dst_bit_size),
++                            mat_size: HmmaSize::M16N8K16,
++                            srcs: [cmat_a.into(), cmat_b.into(), cmat_c.into()],
++                        });
++                    }
++                    NAK_CMAT_TYPE_M8N8K16 | NAK_CMAT_TYPE_M16N8K32 => {
++                        let a_type = match flags.a_type() as u32 {
++                            GLSL_TYPE_UINT8 => IntType::U8,
++                            GLSL_TYPE_INT8 => IntType::I8,
++                            val => panic!("Invalid a_type: {val}"),
++                        };
++                        let b_type = match flags.b_type() as u32 {
++                            GLSL_TYPE_UINT8 => IntType::U8,
++                            GLSL_TYPE_INT8 => IntType::I8,
++                            val => panic!("Invalid b_type: {val}"),
++                        };
++
++                        let mat_size = if flags.cmat_type() == NAK_CMAT_TYPE_M8N8K16 {
++                            ImmaSize::M8N8K16
++                        } else {
++                            ImmaSize::M16N8K32
++                        };
++
++                        b.push_op(OpImma {
++                            dst: dst.into(),
++                            mat_size,
++                            srcs: [cmat_a.into(), cmat_b.into(), cmat_c.into()],
++                            src_types: [a_type, b_type],
++                        });
++                    }
++                    val => panic!("Unknown cmat_type {val}"),
++                }
++
++                self.set_dst(&intrin.def, dst);
++            }
+             _ => panic!(
+                 "Unsupported intrinsic instruction: {}",
+                 intrin.info().name()
+diff --git a/src/nouveau/compiler/nak/ir.rs b/src/nouveau/compiler/nak/ir.rs
+index b13a9bd867e007a59e8630bb28435a6d7194230b..6be583425020d949eb01f8533ce1eeefee06cafd 100644
+--- a/src/nouveau/compiler/nak/ir.rs
++++ b/src/nouveau/compiler/nak/ir.rs
+@@ -420,39 +420,41 @@ impl fmt::Display for SSAValue {
+ /// registers, with the base register aligned to the number of values, aligned
+ /// to the next power of two.
+ ///
+-/// An SSA reference can reference between 1 and 4 SSA values.  It dereferences
++/// An SSA reference can reference between 1 and 16 SSA values.  It dereferences
+ /// to a slice for easy access to individual SSA values.  The structure is
+-/// designed so that is always 16B, regardless of how many SSA values are
++/// designed so that is always 64B, regardless of how many SSA values are
+ /// referenced so it's easy and fairly cheap to copy around and embed in other
+ /// structures.
+ #[derive(Clone, Copy, Eq, Hash, PartialEq)]
+ pub struct SSARef {
+-    v: [SSAValue; 4],
++    v: [SSAValue; Self::MAX_VALUES_PER_REF],
+ }
+ 
+ impl SSARef {
++    pub const MAX_VALUES_PER_REF: usize = 16;
++
+     /// Returns a new SSA reference
+     #[inline]
+     fn new(comps: &[SSAValue]) -> SSARef {
+-        assert!(comps.len() > 0 && comps.len() <= 4);
++        assert!(comps.len() > 0 && comps.len() <= Self::MAX_VALUES_PER_REF);
+         let mut r = SSARef {
+-            v: [SSAValue::NONE; 4],
++            v: [SSAValue::NONE; Self::MAX_VALUES_PER_REF],
+         };
+         for i in 0..comps.len() {
+             r.v[i] = comps[i];
+         }
+-        if comps.len() < 4 {
+-            r.v[3].packed = (comps.len() as u32).wrapping_neg();
++        if comps.len() < Self::MAX_VALUES_PER_REF {
++            r.v[Self::MAX_VALUES_PER_REF - 1].packed = (comps.len() as u32).wrapping_neg();
+         }
+         r
+     }
+ 
+     /// Returns the number of components in this SSA reference
+     pub fn comps(&self) -> u8 {
+-        if self.v[3].packed >= u32::MAX - 2 {
+-            self.v[3].packed.wrapping_neg() as u8
++        if self.v[Self::MAX_VALUES_PER_REF - 1].packed >= u32::MAX - Self::MAX_VALUES_PER_REF as u32 {
++            self.v[Self::MAX_VALUES_PER_REF - 1].packed.wrapping_neg() as u8
+         } else {
+-            4
++            Self::MAX_VALUES_PER_REF as u8
+         }
+     }
+ 
+@@ -519,7 +521,7 @@ impl TryFrom<&[SSAValue]> for SSARef {
+     fn try_from(comps: &[SSAValue]) -> Result<Self, Self::Error> {
+         if comps.len() == 0 {
+             Err("Empty vector")
+-        } else if comps.len() > 4 {
++        } else if comps.len() > Self::MAX_VALUES_PER_REF {
+             Err("Too many vector components")
+         } else {
+             Ok(SSARef::new(comps))
+@@ -548,6 +550,7 @@ impl_ssa_ref_from_arr!(1);
+ impl_ssa_ref_from_arr!(2);
+ impl_ssa_ref_from_arr!(3);
+ impl_ssa_ref_from_arr!(4);
++impl_ssa_ref_from_arr!(16);
+ 
+ impl From<SSAValue> for SSARef {
+     fn from(val: SSAValue) -> Self {
+@@ -592,8 +595,8 @@ impl SSAValueAllocator {
+     }
+ 
+     pub fn alloc_vec(&mut self, file: RegFile, comps: u8) -> SSARef {
+-        assert!(comps >= 1 && comps <= 4);
+-        let mut vec = [SSAValue::NONE; 4];
++        assert!(comps >= 1 && comps <= SSARef::MAX_VALUES_PER_REF as u8);
++        let mut vec = [SSAValue::NONE; SSARef::MAX_VALUES_PER_REF];
+         for c in 0..comps {
+             vec[usize::from(c)] = self.alloc(file);
+         }
+@@ -3143,6 +3146,195 @@ impl DisplayOp for OpHMul2 {
+ }
+ impl_display_for_op!(OpHMul2);
+ 
++#[derive(Clone, Copy, Eq, PartialEq)]
++#[allow(dead_code)]
++pub enum ImmaSize {
++    M8N8K16,
++    M8N8K32,
++    M16N8K16,
++    M16N8K64,
++    M16N8K32,
++}
++
++impl fmt::Display for ImmaSize {
++    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
++        match self {
++            ImmaSize::M8N8K16 => write!(f, ".m8n8k16"),
++            ImmaSize::M8N8K32 => write!(f, ".m8n8k32"),
++            ImmaSize::M16N8K16 => write!(f, ".m16n8k16"),
++            ImmaSize::M16N8K32 => write!(f, ".m16n8k32"),
++            ImmaSize::M16N8K64 => write!(f, ".m16n8k64"),
++        }
++    }
++}
++
++#[repr(C)]
++#[derive(SrcsAsSlice, DstsAsSlice)]
++pub struct OpImma {
++    #[dst_type(Vec)]
++    pub dst: Dst,
++
++    pub mat_size: ImmaSize,
++    pub src_types: [IntType; 2],
++
++    #[src_type(SSA)]
++    pub srcs: [Src; 3],
++}
++
++impl DisplayOp for OpImma {
++    fn fmt_op(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
++        write!(
++            f,
++            "imma{}{}{} {} {} {}",
++            self.mat_size,
++            self.src_types[0],
++            self.src_types[1],
++            self.srcs[0],
++            self.srcs[1],
++            self.srcs[2],
++        )
++    }
++}
++
++impl_display_for_op!(OpImma);
++
++#[derive(Clone, Copy, Eq, PartialEq)]
++#[allow(dead_code)]
++pub enum HmmaSize {
++    M16N8K16,
++    M16N8K8,
++    M16N8K4,
++}
++
++impl fmt::Display for HmmaSize {
++    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
++        match self {
++            HmmaSize::M16N8K16 => write!(f, ".m16n8k16"),
++            HmmaSize::M16N8K8 => write!(f, ".m16n8k8"),
++            HmmaSize::M16N8K4 => write!(f, ".m16n8k4"),
++        }
++    }
++}
++
++#[repr(C)]
++#[derive(SrcsAsSlice, DstsAsSlice)]
++pub struct OpHmma {
++    #[dst_type(Vec)]
++    pub dst: Dst,
++
++    pub mat_size: HmmaSize,
++    pub dst_type: FloatType,
++
++    #[src_type(SSA)]
++    pub srcs: [Src; 3],
++}
++
++impl DisplayOp for OpHmma {
++    fn fmt_op(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
++        write!(
++            f,
++            "hmma{}{} {} {} {}",
++            self.mat_size,
++            self.dst_type,
++            self.srcs[0],
++            self.srcs[1],
++            self.srcs[2],
++        )
++    }
++}
++
++impl_display_for_op!(OpHmma);
++
++#[derive(Clone, Copy, Eq, PartialEq)]
++#[allow(dead_code)]
++pub enum MovmSize {
++    MT8N8,
++    M8N32,
++    M8N64,
++}
++
++impl fmt::Display for MovmSize {
++    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
++        match self {
++            MovmSize::MT8N8 => write!(f, ".m8n8.trans"),
++            MovmSize::M8N32 => write!(f, ".m8n32"),
++            MovmSize::M8N64 => write!(f, ".m8n64"),
++        }
++    }
++}
++
++#[repr(C)]
++#[derive(SrcsAsSlice, DstsAsSlice)]
++pub struct OpMovm {
++    #[dst_type(Vec)]
++    pub dst: Dst,
++
++    pub mat_size: MovmSize,
++
++    #[src_type(SSA)]
++    pub src: Src,
++}
++
++impl DisplayOp for OpMovm {
++    fn fmt_op(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
++        write!(f, "movm.16.{} {} {}", self.mat_size, self.dst, self.src,)
++    }
++}
++
++impl_display_for_op!(OpMovm);
++
++#[derive(Clone, Copy, Eq, PartialEq)]
++#[allow(dead_code)]
++pub enum LdsmSize {
++    M8N8,
++    MT8N8,
++    M8N16,
++    M8N32,
++}
++
++impl fmt::Display for LdsmSize {
++    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
++        match self {
++            LdsmSize::M8N8 => write!(f, ".m8n8"),
++            LdsmSize::MT8N8 => write!(f, ".m8n8.trans"),
++            LdsmSize::M8N16 => write!(f, ".m8n16"),
++            LdsmSize::M8N32 => write!(f, ".m8n32"),
++        }
++    }
++}
++
++#[repr(C)]
++#[derive(SrcsAsSlice, DstsAsSlice)]
++pub struct OpLdsm {
++    #[dst_type(Vec)]
++    pub dst: Dst,
++
++    pub mat_size: LdsmSize,
++    pub mat_count: u8,
++
++    #[src_type(SSA)]
++    pub addr: Src,
++
++    pub offset: i32,
++}
++
++impl DisplayOp for OpLdsm {
++    fn fmt_op(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
++        write!(
++            f,
++            "ldsm.16.{}.x{} {} [{}",
++            self.mat_size, self.mat_count, self.dst, self.addr,
++        )?;
++
++        if self.offset > 0 {
++            write!(f, "+{:#x}", self.offset)?;
++        }
++        write!(f, "]")
++    }
++}
++
++impl_display_for_op!(OpLdsm);
++
+ #[repr(C)]
+ #[derive(SrcsAsSlice, DstsAsSlice)]
+ pub struct OpHFma2 {
+@@ -6165,6 +6357,10 @@ pub enum Op {
+     HMul2(OpHMul2),
+     HSet2(OpHSet2),
+     HSetP2(OpHSetP2),
++    Imma(OpImma),
++    Hmma(OpHmma),
++    Movm(OpMovm),
++    Ldsm(OpLdsm),
+     HMnMx2(OpHMnMx2),
+     BMsk(OpBMsk),
+     BRev(OpBRev),
+@@ -6661,6 +6857,9 @@ impl Instr {
+             | Op::DMul(_)
+             | Op::DSetP(_) => false,
+ 
++            // Matrix Multiply Add
++            Op::Imma(_) | Op::Hmma(_) | Op::Movm(_) | Op::Ldsm(_) => false,
++
+             // Integer ALU
+             Op::BRev(_) | Op::Flo(_) | Op::PopC(_) => false,
+             Op::IMad(_) | Op::IMul(_) => sm >= 70,
+diff --git a/src/nouveau/compiler/nak/sm70.rs b/src/nouveau/compiler/nak/sm70.rs
+index e1a8d788ba0763e462350f008a503e1373425c8b..2c6dbb62bbf9538acb5bce04011bf26bd9e8d191 100644
+--- a/src/nouveau/compiler/nak/sm70.rs
++++ b/src/nouveau/compiler/nak/sm70.rs
+@@ -1338,6 +1338,159 @@ impl SM70Op for OpHSetP2 {
+     }
+ }
+ 
++impl SM70Op for OpImma {
++    fn legalize(&mut self, b: &mut LegalizeBuilder) {
++        let gpr = op_gpr(self);
++        let [src0, src1, src2] = &mut self.srcs;
++        b.copy_alu_src_if_not_reg(src0, gpr, SrcType::GPR);
++        b.copy_alu_src_if_not_reg(src1, gpr, SrcType::GPR);
++        b.copy_alu_src_if_not_reg(src2, gpr, SrcType::GPR);
++    }
++
++    fn encode(&self, e: &mut SM70Encoder<'_>) {
++        assert!(e.sm.sm >= 75);
++
++        assert!(
++            self.src_types[0] == IntType::U8
++                || self.src_types[0] == IntType::I8
++        );
++        assert!(
++            self.src_types[1] == IntType::U8
++                || self.src_types[1] == IntType::I8
++        );
++
++        e.set_opcode(0x237);
++        e.set_dst(self.dst);
++        e.set_reg_src(24..32, self.srcs[0]);
++        e.set_reg_src(32..40, self.srcs[1]);
++        e.set_reg_src(64..72, self.srcs[2]);
++
++        match self.mat_size {
++            ImmaSize::M8N8K16 => {
++                e.set_bit(75, false);
++                e.set_field(85..87, 0_u8);
++            }
++
++            ImmaSize::M8N8K32 => {
++                e.set_bit(75, false);
++                e.set_field(85..87, 1_u8);
++            }
++
++            ImmaSize::M16N8K16 => {
++                e.set_bit(75, false);
++                e.set_field(85..87, 2_u8);
++            }
++
++            ImmaSize::M16N8K32 => {
++                e.set_bit(75, true);
++                e.set_field(85..87, 2_u8);
++            }
++
++            ImmaSize::M16N8K64 => {
++                e.set_bit(75, false);
++                e.set_field(85..87, 3_u8);
++            }
++        }
++
++        e.set_bit(76, self.src_types[0].is_signed());
++        e.set_bit(78, self.src_types[1].is_signed());
++        e.set_bit(74, true); // SRC1.COL
++        e.set_bit(82, false); // .SAT
++        e.set_bit(83, false); // SRC0.{U|S}4
++        e.set_bit(84, false); // SRC1.{U|S}4
++    }
++}
++
++impl SM70Op for OpHmma {
++    fn legalize(&mut self, b: &mut LegalizeBuilder) {
++        let gpr = op_gpr(self);
++        let [src0, src1, src2] = &mut self.srcs;
++        b.copy_alu_src_if_not_reg(src0, gpr, SrcType::GPR);
++        b.copy_alu_src_if_not_reg(src1, gpr, SrcType::GPR);
++        b.copy_alu_src_if_not_reg(src2, gpr, SrcType::GPR);
++    }
++
++    fn encode(&self, e: &mut SM70Encoder<'_>) {
++        assert!(e.sm.sm >= 75);
++
++        e.set_opcode(0x23c);
++        e.set_dst(self.dst);
++        e.set_reg_src(24..32, self.srcs[0]);
++        e.set_reg_src(32..40, self.srcs[1]);
++        e.set_reg_src(64..72, self.srcs[2]);
++
++        assert!(
++            self.dst_type == FloatType::F16 || self.dst_type == FloatType::F32
++        );
++
++        match self.mat_size {
++            HmmaSize::M16N8K16 => {
++                e.set_bit(75, true);
++                e.set_bit(78, false);
++            }
++            HmmaSize::M16N8K8 => {
++                e.set_bit(75, false);
++                e.set_bit(78, false);
++            }
++            HmmaSize::M16N8K4 => {
++                e.set_bit(75, false);
++                e.set_bit(78, true);
++            }
++        }
++
++        e.set_bit(76, self.dst_type == FloatType::F32); // .F32
++        e.set_bit(82, false); // .BF16 (SM86+)
++        e.set_bit(83, false); // .TF32 (SM86+)
++    }
++}
++
++impl SM70Op for OpMovm {
++    fn legalize(&mut self, b: &mut LegalizeBuilder) {
++        let gpr = op_gpr(self);
++        b.copy_alu_src_if_not_reg(&mut self.src, gpr, SrcType::GPR);
++    }
++
++    fn encode(&self, e: &mut SM70Encoder<'_>) {
++        assert!(e.sm.sm >= 75);
++
++        e.encode_alu(0x03a, Some(&self.dst), Some(&self.src), None, None);
++
++        e.set_field(
++            78..80,
++            match self.mat_size {
++                MovmSize::MT8N8 => 0x00_u8,
++                MovmSize::M8N32 => 0x01_u8,
++                MovmSize::M8N64 => 0x02_u8,
++            },
++        );
++    }
++}
++
++impl SM70Op for OpLdsm {
++    fn legalize(&mut self, b: &mut LegalizeBuilder) {
++        legalize_ext_instr(self, b);
++    }
++
++    fn encode(&self, e: &mut SM70Encoder<'_>) {
++        assert!(e.sm.sm >= 75);
++
++        e.set_opcode(0x83b);
++        e.set_dst(self.dst);
++        e.set_reg_src(24..32, self.addr);
++        e.set_field(40..64, self.offset);
++
++        e.set_field(
++            78..80,
++            match self.mat_size {
++                LdsmSize::M8N8 => 0x00_u8,
++                LdsmSize::MT8N8 => 0x01_u8,
++                LdsmSize::M8N16 => 0x02_u8,
++                LdsmSize::M8N32 => 0x03_u8,
++            },
++        );
++    }
++}
++
+ impl SM70Op for OpHMnMx2 {
+     fn legalize(&mut self, b: &mut LegalizeBuilder) {
+         let gpr = op_gpr(self);
+@@ -3410,6 +3563,10 @@ macro_rules! as_sm70_op_match {
+             Op::HMul2(op) => op,
+             Op::HSet2(op) => op,
+             Op::HSetP2(op) => op,
++            Op::Imma(op) => op,
++            Op::Hmma(op) => op,
++            Op::Movm(op) => op,
++            Op::Ldsm(op) => op,
+             Op::HMnMx2(op) => op,
+             Op::MuFu(op) => op,
+             Op::BMsk(op) => op,
+diff --git a/src/nouveau/compiler/nak_nir.c b/src/nouveau/compiler/nak_nir.c
+index 4d6d28ce8ff5a9740e1ca8ad039d01a2c27ee431..30790e18839b1521f53e10d3211354a1b73c0ebf 100644
+--- a/src/nouveau/compiler/nak_nir.c
++++ b/src/nouveau/compiler/nak_nir.c
+@@ -318,6 +318,11 @@ nak_preprocess_nir(nir_shader *nir, const struct nak_compiler *nak)
+ 
+    OPT(nir, nir_lower_global_vars_to_local);
+ 
++   OPT(nir, nak_nir_lower_cooperative_matrix, nak);
++
++   /* Cooperative matrix lowering can generate dead code */
++   OPT(nir, nir_opt_dce);
++
+    OPT(nir, nir_split_var_copies);
+    OPT(nir, nir_split_struct_vars, nir_var_function_temp);
+ 
+diff --git a/src/nouveau/compiler/nak_nir_lower_cooperative_matrix.c b/src/nouveau/compiler/nak_nir_lower_cooperative_matrix.c
+new file mode 100644
+index 0000000000000000000000000000000000000000..c71b0cefe7bb96eff94c26136fa5df7900ee554b
+--- /dev/null
++++ b/src/nouveau/compiler/nak_nir_lower_cooperative_matrix.c
+@@ -0,0 +1,825 @@
++/*
++ * Copyright © 2023 Bas Nieuwenhuizen
++ * Copyright © 2024 Collabora, Ltd.
++ * SPDX-License-Identifier: MIT
++ */
++
++#include "util/macros.h"
++#include "glsl_types.h"
++#include "nak_private.h"
++#include "nir_builder.h"
++
++#define NAK_WARP_SIZE 32
++
++static enum nak_cmat_type
++get_nak_cmat_type_from_desc(struct glsl_cmat_description matrix_desc)
++{
++   unsigned cols = matrix_desc.cols;
++   unsigned rows = matrix_desc.rows;
++   unsigned element_type = matrix_desc.element_type;
++   bool is_float =
++      element_type == GLSL_TYPE_FLOAT || element_type == GLSL_TYPE_FLOAT16;
++   bool is_integer =
++      element_type == GLSL_TYPE_INT || element_type == GLSL_TYPE_UINT ||
++      element_type == GLSL_TYPE_INT8 || element_type == GLSL_TYPE_UINT8;
++
++   // MxNxK (A/B/C/D)
++   if (matrix_desc.use == GLSL_CMAT_USE_A) {
++      // MxK (A)
++      if (rows == 16 && cols == 8 && is_float)
++         return NAK_CMAT_TYPE_M16N8K8;
++
++      // Overlap with NAK_CMAT_TYPE_M16N16K16
++      if (rows == 16 && cols == 16 && is_float)
++         return NAK_CMAT_TYPE_M16N8K16;
++
++      // Overlap with NAK_CMAT_TYPE_M16N16K32
++      if (rows == 16 && cols == 32 && is_integer)
++         return NAK_CMAT_TYPE_M16N8K32;
++   } else if (matrix_desc.use == GLSL_CMAT_USE_B) {
++      // KxN (B)
++      if (rows == 8 && cols == 8 && is_float)
++         return NAK_CMAT_TYPE_M16N8K8;
++
++      if (rows == 16 && cols == 8 && is_float)
++         return NAK_CMAT_TYPE_M16N8K16;
++
++      if (rows == 16 && cols == 16 && is_float)
++         return NAK_CMAT_TYPE_M16N16K16;
++
++      if (rows == 32 && cols == 8 && is_integer)
++         return NAK_CMAT_TYPE_M16N8K32;
++
++      if (rows == 32 && cols == 16 && is_integer)
++         return NAK_CMAT_TYPE_M16N16K32;
++   } else if (matrix_desc.use == GLSL_CMAT_USE_ACCUMULATOR) {
++      // MxN (C)
++      // Overlap with NAK_CMAT_TYPE_M16N8K16
++      if (rows == 16 && cols == 8 && is_float)
++         return NAK_CMAT_TYPE_M16N8K8;
++
++      if (rows == 16 && cols == 16 && is_float)
++         return NAK_CMAT_TYPE_M16N16K16;
++
++      if (rows == 16 && cols == 8 && is_integer)
++         return NAK_CMAT_TYPE_M16N8K32;
++
++      if (rows == 16 && cols == 16 && is_integer)
++         return NAK_CMAT_TYPE_M16N16K32;
++   }
++
++   return NAK_CMAT_TYPE_UNKNOWN;
++}
++
++static enum nak_cmat_type
++get_nak_cmat_type_for_muladd(struct glsl_cmat_description a_desc,
++                             struct glsl_cmat_description b_desc,
++                             struct glsl_cmat_description c_desc)
++{
++   unsigned m = a_desc.rows;
++   unsigned k = b_desc.rows;
++   unsigned n = c_desc.cols;
++   unsigned element_type = a_desc.element_type;
++   bool is_float =
++      element_type == GLSL_TYPE_FLOAT || element_type == GLSL_TYPE_FLOAT16;
++   bool is_integer =
++      element_type == GLSL_TYPE_INT || element_type == GLSL_TYPE_UINT ||
++      element_type == GLSL_TYPE_INT8 || element_type == GLSL_TYPE_UINT8;
++
++   if (m == 16 && n == 8 && k == 8 && is_float)
++      return NAK_CMAT_TYPE_M16N8K8;
++
++   if (m == 16 && n == 8 && k == 16 && is_float)
++      return NAK_CMAT_TYPE_M16N8K16;
++
++   if (m == 16 && n == 16 && k == 16 && is_float)
++      return NAK_CMAT_TYPE_M16N16K16;
++
++   if (m == 16 && n == 8 && k == 32 && is_integer)
++      return NAK_CMAT_TYPE_M16N8K32;
++
++   if (m == 16 && n == 16 && k == 32 && is_integer)
++      return NAK_CMAT_TYPE_M16N16K32;
++
++   return NAK_CMAT_TYPE_UNKNOWN;
++}
++
++static unsigned
++get_cmat_size(struct glsl_cmat_description matrix_desc)
++{
++   return matrix_desc.cols * matrix_desc.rows;
++}
++
++static unsigned
++get_cmat_length(struct glsl_cmat_description matrix_desc)
++{
++   return get_cmat_size(matrix_desc) / NAK_WARP_SIZE;
++}
++
++static nir_def *
++load_cmat(nir_builder *b, nir_def *src)
++{
++   nir_deref_instr *deref = nir_instr_as_deref(src->parent_instr);
++   struct glsl_cmat_description matrix_desc =
++      *glsl_get_cmat_description(deref->type);
++
++   return nir_build_load_deref(
++      b, get_cmat_length(matrix_desc),
++      glsl_base_type_bit_size(matrix_desc.element_type), src, 0);
++}
++
++static const struct glsl_type *
++remap_matrix_type(struct hash_table *mapping, const struct glsl_type *orig)
++{
++   struct hash_entry *entry = _mesa_hash_table_search(mapping, orig);
++
++   if (entry)
++      return entry->data;
++
++   const struct glsl_type *new_type = orig;
++
++   if (glsl_type_is_cmat(orig)) {
++      struct glsl_cmat_description matrix_desc =
++         *glsl_get_cmat_description(orig);
++
++      new_type = glsl_vector_type(matrix_desc.element_type,
++                                  get_cmat_length(matrix_desc));
++   } else if (glsl_type_is_array(orig)) {
++      const struct glsl_type *elem_type = glsl_get_array_element(orig);
++      const struct glsl_type *new_elem_type =
++         remap_matrix_type(mapping, elem_type);
++
++      if (elem_type != new_elem_type) {
++         new_type = glsl_array_type(new_elem_type, glsl_get_length(orig),
++                                    glsl_get_explicit_stride(orig));
++      }
++   } else if (glsl_type_is_struct(orig)) {
++      unsigned i;
++      for (i = 0; i < orig->length; i++) {
++         const struct glsl_type *field_type = glsl_get_struct_field(orig, i);
++         const struct glsl_type *new_field_type =
++            remap_matrix_type(mapping, field_type);
++
++         if (field_type != new_field_type) {
++            break;
++         }
++      }
++
++      /* If we found a cmat, remap the structure type */
++      if (i < orig->length) {
++         struct glsl_struct_field *fields =
++            malloc(sizeof(struct glsl_struct_field) * orig->length);
++
++         /* Copy everything that didn't change */
++         memcpy(fields, orig->fields.structure,
++                sizeof(struct glsl_struct_field) * i);
++
++         /* Remap the rest */
++         for (; i < orig->length; i++) {
++            fields[i] = *glsl_get_struct_field_data(orig, i);
++            fields[i].type = remap_matrix_type(mapping, fields[i].type);
++         }
++
++         new_type =
++            glsl_struct_type(fields, orig->length, glsl_get_type_name(orig),
++                             glsl_struct_type_is_packed(orig));
++
++         free(fields);
++      }
++   }
++
++   _mesa_hash_table_insert(mapping, orig, (void *)new_type);
++   return new_type;
++}
++
++static void
++compute_matrix_16x8x16_target(struct nir_builder *b,
++                              struct glsl_cmat_description desc,
++                              nir_def *lane_id, unsigned idx, nir_def **col_ptr,
++                              nir_def **row_ptr)
++{
++   nir_def *group_id = nir_udiv_imm(b, lane_id, 4);
++   nir_def *thread_id_in_group = nir_imod_imm(b, lane_id, 4);
++   nir_def *col;
++   nir_def *row;
++
++   if (desc.use != GLSL_CMAT_USE_B) {
++      row = group_id;
++
++      if (idx >= 2)
++         row = nir_iadd_imm(b, row, 8);
++
++      col = nir_iadd_imm(b, nir_imul_imm(b, thread_id_in_group, 2), idx & 1);
++   } else {
++      row = nir_iadd_imm(b, nir_imul_imm(b, thread_id_in_group, 2), idx & 1);
++
++      if (idx >= 2)
++         row = nir_iadd_imm(b, row, 8);
++
++      col = group_id;
++   }
++
++   *col_ptr = col;
++   *row_ptr = row;
++}
++
++static void
++compute_matrix_16x8x32_target(struct nir_builder *b,
++                              struct glsl_cmat_description desc,
++                              nir_def *lane_id, unsigned idx, nir_def **col_ptr,
++                              nir_def **row_ptr)
++{
++   nir_def *group_id = nir_udiv_imm(b, lane_id, 4);
++   nir_def *thread_id_in_group = nir_imod_imm(b, lane_id, 4);
++   nir_def *col;
++   nir_def *row;
++
++   if (desc.use == GLSL_CMAT_USE_A) {
++      row = group_id;
++
++      if ((idx >= 0 && idx < 4) || (idx >= 8 && idx < 12)) {
++         row = group_id;
++      } else {
++         row = nir_iadd_imm(b, group_id, 8);
++      }
++
++      col = nir_iadd_imm(b, nir_imul_imm(b, thread_id_in_group, 4), idx & 3);
++
++      if (idx >= 8)
++         col = nir_iadd_imm(b, col, 16);
++   } else if (desc.use == GLSL_CMAT_USE_B) {
++      row = nir_iadd_imm(b, nir_imul_imm(b, thread_id_in_group, 4), idx & 3);
++
++      if (idx >= 4)
++         row = nir_iadd_imm(b, row, 16);
++
++      col = group_id;
++   } else {
++      assert(desc.use == GLSL_CMAT_USE_ACCUMULATOR);
++      row = group_id;
++
++      if (idx >= 2)
++         row = nir_iadd_imm(b, row, 8);
++
++      col = nir_iadd_imm(b, nir_imul_imm(b, thread_id_in_group, 2), idx & 1);
++   }
++
++   *col_ptr = col;
++   *row_ptr = row;
++}
++
++static void
++compute_matrix_16x16x32_target(struct nir_builder *b,
++                               struct glsl_cmat_description desc,
++                               nir_def *lane_id, unsigned idx,
++                               nir_def **col_ptr, nir_def **row_ptr)
++{
++   nir_def *group_id = nir_udiv_imm(b, lane_id, 4);
++   nir_def *thread_id_in_group = nir_imod_imm(b, lane_id, 4);
++   nir_def *col;
++   nir_def *row;
++
++   if (desc.use == GLSL_CMAT_USE_A) {
++      row = group_id;
++
++      if ((idx >= 0 && idx < 4) || (idx >= 8 && idx < 12)) {
++         row = group_id;
++      } else {
++         row = nir_iadd_imm(b, group_id, 8);
++      }
++
++      col = nir_iadd_imm(b, nir_imul_imm(b, thread_id_in_group, 4), idx & 3);
++
++      if (idx >= 8)
++         col = nir_iadd_imm(b, col, 16);
++   } else if (desc.use == GLSL_CMAT_USE_B) {
++      if ((idx >= 0 && idx < 4) || (idx >= 8 && idx < 12)) {
++         col = group_id;
++      } else {
++         col = nir_iadd_imm(b, group_id, 8);
++      }
++
++      row = nir_iadd_imm(b, nir_imul_imm(b, thread_id_in_group, 4), idx & 3);
++
++      if (idx >= 8)
++         row = nir_iadd_imm(b, row, 16);
++   } else {
++      assert(desc.use == GLSL_CMAT_USE_ACCUMULATOR);
++      row = group_id;
++
++      if ((idx % 4) >= 2)
++         row = nir_iadd_imm(b, row, 8);
++
++      col = nir_iadd_imm(b, nir_imul_imm(b, thread_id_in_group, 2),
++                         (idx & 1) + (idx / 4) * 8);
++   }
++
++   *col_ptr = col;
++   *row_ptr = row;
++}
++
++static void
++compute_matrix_offsets(struct nir_builder *b, struct glsl_cmat_description desc,
++                       enum glsl_matrix_layout layout, nir_def *lane_id,
++                       unsigned idx, nir_def **col_offset, nir_def **row_offset)
++{
++   enum nak_cmat_type cmat_type = get_nak_cmat_type_from_desc(desc);
++
++   switch (cmat_type) {
++   case NAK_CMAT_TYPE_M16N8K8:
++   case NAK_CMAT_TYPE_M16N8K16:
++   case NAK_CMAT_TYPE_M16N16K16:
++      compute_matrix_16x8x16_target(b, desc, lane_id, idx % 4, col_offset,
++                                    row_offset);
++      *col_offset = nir_iadd_imm(b, *col_offset, (idx / 4) * 8);
++      break;
++   case NAK_CMAT_TYPE_M16N8K32:
++      compute_matrix_16x8x32_target(b, desc, lane_id, idx % 16, col_offset,
++                                    row_offset);
++      break;
++
++   case NAK_CMAT_TYPE_M16N16K32:
++      compute_matrix_16x16x32_target(b, desc, lane_id, idx % 16, col_offset,
++                                     row_offset);
++      break;
++
++   default:
++      unreachable("Unknown cmat_type");
++   }
++
++   if (layout == GLSL_MATRIX_LAYOUT_ROW_MAJOR) {
++      nir_def *tmp = *col_offset;
++      *col_offset = *row_offset;
++      *row_offset = tmp;
++   }
++}
++
++static enum nak_cmat_type
++get_hw_nak_cmat_type(enum nak_cmat_type cmat_type, uint8_t sm)
++{
++   switch (cmat_type) {
++   case NAK_CMAT_TYPE_M16N16K16:
++      return NAK_CMAT_TYPE_M16N8K16;
++   case NAK_CMAT_TYPE_M16N16K32:
++   case NAK_CMAT_TYPE_M16N8K32:
++      /* Turing only support M16N8K16 */
++      return sm >= 80 ? NAK_CMAT_TYPE_M16N8K32 : NAK_CMAT_TYPE_M8N8K16;
++   default:
++      return cmat_type;
++   }
++}
++
++static nir_def *
++lower_cmat_muladd(nir_builder *b, nir_intrinsic_instr *intr, nir_def *cmat_a,
++                  nir_def *cmat_b, nir_def *cmat_c,
++                  struct glsl_cmat_description a_desc,
++                  struct glsl_cmat_description b_desc,
++                  struct glsl_cmat_description c_desc,
++                  struct glsl_cmat_description d_desc, uint8_t sm)
++{
++   unsigned dst_length = get_cmat_length(d_desc);
++
++   nir_def *ret;
++
++   /* MxNxK */
++   enum nak_cmat_type cmat_type =
++      get_nak_cmat_type_for_muladd(a_desc, b_desc, c_desc);
++   enum nak_cmat_type hw_cmat_type = get_hw_nak_cmat_type(cmat_type, sm);
++
++   const struct nak_nir_cmat_mul_add_flags flags = {
++      .cmat_type = hw_cmat_type,
++      .a_type = a_desc.element_type,
++      .b_type = b_desc.element_type,
++   };
++   uint32_t flags_u32;
++   STATIC_ASSERT(sizeof(flags_u32) == sizeof(flags));
++   memcpy(&flags_u32, &flags, sizeof(flags_u32));
++
++   if (cmat_type != hw_cmat_type) {
++      unsigned a_length = get_cmat_length(a_desc);
++      unsigned b_length = get_cmat_length(b_desc);
++      unsigned c_length = get_cmat_length(c_desc);
++
++      nir_def *a_comps[NIR_MAX_VEC_COMPONENTS];
++      nir_def *b_comps[NIR_MAX_VEC_COMPONENTS];
++      nir_def *c_comps[NIR_MAX_VEC_COMPONENTS];
++      nir_def *d_comps[NIR_MAX_VEC_COMPONENTS];
++
++      for (unsigned i = 0; i < a_length; i++)
++         a_comps[i] = nir_channel(b, cmat_a, i);
++
++      for (unsigned i = 0; i < b_length; i++)
++         b_comps[i] = nir_channel(b, cmat_b, i);
++
++      for (unsigned i = 0; i < c_length; i++)
++         c_comps[i] = nir_channel(b, cmat_c, i);
++
++      if (cmat_type == NAK_CMAT_TYPE_M16N16K16) {
++         nir_def *cmat_b_low = nir_vec(b, b_comps, b_length / 2);
++         nir_def *cmat_b_high =
++            nir_vec(b, &b_comps[b_length / 2], b_length / 2);
++
++         nir_def *cmat_c_low = nir_vec(b, c_comps, c_length / 2);
++         nir_def *cmat_c_high =
++            nir_vec(b, &c_comps[c_length / 2], c_length / 2);
++
++         nir_def *cmat_d_low =
++            nir_cmat_muladd_nv(b, dst_length / 2, cmat_a, cmat_b_low,
++                               cmat_c_low, .flags = flags_u32);
++         nir_def *cmat_d_high =
++            nir_cmat_muladd_nv(b, dst_length / 2, cmat_a, cmat_b_high,
++                               cmat_c_high, .flags = flags_u32);
++
++         for (unsigned i = 0; i < dst_length / 2; i++)
++            d_comps[i] = nir_channel(b, cmat_d_low, i);
++         for (unsigned i = 0; i < dst_length / 2; i++)
++            d_comps[dst_length / 2 + i] = nir_channel(b, cmat_d_high, i);
++      } else if (hw_cmat_type == NAK_CMAT_TYPE_M8N8K16 &&
++                 (cmat_type == NAK_CMAT_TYPE_M16N8K32 ||
++                  cmat_type == NAK_CMAT_TYPE_M16N16K32)) {
++         const unsigned a_hw_length = 4;
++         const unsigned b_hw_length = 4;
++         const unsigned c_hw_length = 2;
++         const unsigned d_hw_length = 2;
++
++         for (unsigned i = 0; i < dst_length / d_hw_length; i++) {
++            unsigned cmat_a_low_offset = (i % 2) * a_hw_length;
++            unsigned cmat_a_high_offset = cmat_a_low_offset + 8;
++            unsigned cmat_b_low_offset = (i / 2) * b_hw_length;
++            unsigned cmat_b_high_offset = cmat_b_low_offset + 4;
++            unsigned cmat_c_offset = i * c_hw_length;
++
++            if (cmat_type == NAK_CMAT_TYPE_M16N16K32)
++               cmat_b_high_offset = cmat_b_low_offset + 8;
++
++            nir_def *cmat_a_low =
++               nir_vec(b, &a_comps[cmat_a_low_offset], a_hw_length);
++            nir_def *cmat_a_high =
++               nir_vec(b, &a_comps[cmat_a_high_offset], a_hw_length);
++            nir_def *cmat_b_low =
++               nir_vec(b, &b_comps[cmat_b_low_offset], b_hw_length);
++            nir_def *cmat_b_high =
++               nir_vec(b, &b_comps[cmat_b_high_offset], b_hw_length);
++            nir_def *c_part = nir_vec(b, &c_comps[cmat_c_offset], c_hw_length);
++
++            nir_def *new_c =
++               nir_cmat_muladd_nv(b, d_hw_length, cmat_a_low, cmat_b_low,
++                                  c_part, .flags = flags_u32);
++            nir_def *tmp_d =
++               nir_cmat_muladd_nv(b, d_hw_length, cmat_a_high, cmat_b_high,
++                                  new_c, .flags = flags_u32);
++
++            for (unsigned c = 0; c < d_hw_length; c++)
++               d_comps[i * d_hw_length + c] = nir_channel(b, tmp_d, c);
++         }
++      } else if (cmat_type == NAK_CMAT_TYPE_M16N16K32) {
++         nir_def *b_low_comps[NIR_MAX_VEC_COMPONENTS];
++         nir_def *b_high_comps[NIR_MAX_VEC_COMPONENTS];
++
++         assert(b_length == 16);
++
++         for (unsigned i = 0; i < 4; i++) {
++            b_low_comps[i] = nir_channel(b, cmat_b, i);
++            b_low_comps[i + 4] = nir_channel(b, cmat_b, i + 8);
++            b_high_comps[i] = nir_channel(b, cmat_b, i + 4);
++            b_high_comps[i + 4] = nir_channel(b, cmat_b, i + 12);
++         }
++
++         nir_def *cmat_b_low = nir_vec(b, b_low_comps, b_length / 2);
++         nir_def *cmat_b_high = nir_vec(b, b_high_comps, b_length / 2);
++
++         nir_def *cmat_c_low = nir_vec(b, c_comps, c_length / 2);
++         nir_def *cmat_c_high =
++            nir_vec(b, &c_comps[c_length / 2], c_length / 2);
++
++         nir_def *cmat_d_low =
++            nir_cmat_muladd_nv(b, dst_length / 2, cmat_a, cmat_b_low,
++                               cmat_c_low, .flags = flags_u32);
++         nir_def *cmat_d_high =
++            nir_cmat_muladd_nv(b, dst_length / 2, cmat_a, cmat_b_high,
++                               cmat_c_high, .flags = flags_u32);
++
++         for (unsigned i = 0; i < dst_length / 2; i++)
++            d_comps[i] = nir_channel(b, cmat_d_low, i);
++         for (unsigned i = 0; i < dst_length / 2; i++)
++            d_comps[dst_length / 2 + i] = nir_channel(b, cmat_d_high, i);
++      } else {
++         assert(0 && "lowering not implemented");
++      }
++
++      ret = nir_vec(b, d_comps, dst_length);
++   } else {
++      ret = nir_cmat_muladd_nv(b, dst_length, cmat_a, cmat_b, cmat_c,
++                               .flags = flags_u32);
++   }
++
++   return ret;
++}
++
++static bool
++nak_nir_lower_cooperative_matrix_impl(struct hash_table *type_mapping,
++                                      nir_function_impl *impl,
++                                      const struct nak_compiler *nak)
++{
++   bool progress = false;
++
++   /* Remap all cmat temp var to array of scalars */
++   nir_foreach_function_temp_variable(var, impl) {
++      const struct glsl_type *new_type =
++         remap_matrix_type(type_mapping, var->type);
++      if (new_type != var->type) {
++         var->type = new_type;
++         progress = true;
++      }
++   }
++
++   nir_builder b = nir_builder_create(impl);
++   nir_foreach_block_reverse_safe(block, impl) {
++      nir_foreach_instr_reverse_safe(instr, block) {
++         b.cursor = nir_before_instr(instr);
++
++         /* Remap deref types */
++         if (instr->type == nir_instr_type_deref) {
++            nir_deref_instr *deref = nir_instr_as_deref(instr);
++            const struct glsl_type *new_type =
++               remap_matrix_type(type_mapping, deref->type);
++
++            if (new_type != deref->type) {
++               deref->type = new_type;
++               progress = true;
++            }
++
++            continue;
++         } else if (instr->type != nir_instr_type_intrinsic) {
++            continue;
++         }
++
++         nir_intrinsic_instr *intr = nir_instr_as_intrinsic(instr);
++
++         switch (intr->intrinsic) {
++         case nir_intrinsic_cmat_construct: {
++            nir_deref_instr *dst_deref =
++               nir_instr_as_deref(intr->src[0].ssa->parent_instr);
++            struct glsl_cmat_description matrix_desc =
++               *glsl_get_cmat_description(dst_deref->type);
++            nir_def *data = intr->src[1].ssa;
++
++            nir_def *r = nir_replicate(&b, data, get_cmat_length(matrix_desc));
++
++            nir_store_deref(&b, dst_deref, r,
++                            nir_component_mask(r->num_components));
++            nir_instr_remove(instr);
++            progress = true;
++            break;
++         }
++         case nir_intrinsic_cmat_load: {
++            nir_deref_instr *dst_deref =
++               nir_instr_as_deref(intr->src[0].ssa->parent_instr);
++            struct glsl_cmat_description desc =
++               *glsl_get_cmat_description(dst_deref->type);
++            unsigned length = get_cmat_length(desc);
++            enum glsl_matrix_layout layout = nir_intrinsic_matrix_layout(intr);
++
++            nir_deref_instr *deref =
++               nir_instr_as_deref(intr->src[1].ssa->parent_instr);
++            nir_def *stride = intr->src[2].ssa;
++
++            nir_def *vars[NIR_MAX_VEC_COMPONENTS];
++            for (unsigned i = 0; i < length; ++i)
++               vars[i] =
++                  nir_undef(&b, 1, glsl_base_type_bit_size(desc.element_type));
++
++            nir_def *lane_id = nir_load_subgroup_invocation(&b);
++
++            for (unsigned idx = 0; idx < length; idx++) {
++               nir_def *col_offset;
++               nir_def *row_offset;
++
++               compute_matrix_offsets(&b, desc, layout, lane_id, idx,
++                                      &col_offset, &row_offset);
++
++               col_offset = nir_imul(&b, col_offset, stride);
++
++               col_offset = nir_u2uN(&b, col_offset, deref->def.bit_size);
++               row_offset = nir_u2uN(&b, row_offset, deref->def.bit_size);
++
++               nir_deref_instr *iter_deref =
++                  nir_build_deref_ptr_as_array(&b, deref, col_offset);
++               iter_deref = nir_build_deref_cast(
++                  &b, &iter_deref->def, deref->modes,
++                  glsl_scalar_type(desc.element_type),
++                  glsl_base_type_bit_size(desc.element_type) / 8);
++               iter_deref =
++                  nir_build_deref_ptr_as_array(&b, iter_deref, row_offset);
++
++               vars[idx] = nir_load_deref(&b, iter_deref);
++            }
++
++            nir_def *mat = nir_vec(&b, vars, length);
++            nir_store_deref(&b, dst_deref, mat,
++                            nir_component_mask(mat->num_components));
++            nir_instr_remove(instr);
++            progress = true;
++            break;
++         }
++         case nir_intrinsic_cmat_store: {
++            enum glsl_matrix_layout layout = nir_intrinsic_matrix_layout(intr);
++
++            nir_deref_instr *deref =
++               nir_instr_as_deref(intr->src[0].ssa->parent_instr);
++            nir_def *src = intr->src[1].ssa;
++            nir_def *stride = intr->src[2].ssa;
++
++            nir_deref_instr *src_deref = nir_instr_as_deref(src->parent_instr);
++            struct glsl_cmat_description desc =
++               *glsl_get_cmat_description(src_deref->type);
++            unsigned length = get_cmat_length(desc);
++            src = load_cmat(&b, src);
++
++            nir_def *vars[NIR_MAX_VEC_COMPONENTS];
++            for (unsigned i = 0; i < length; i++)
++               vars[i] = nir_channel(&b, src, i);
++
++            nir_def *lane_id = nir_load_subgroup_invocation(&b);
++
++            for (unsigned idx = 0; idx < length; idx++) {
++               nir_def *col_offset;
++               nir_def *row_offset;
++
++               compute_matrix_offsets(&b, desc, layout, lane_id, idx,
++                                      &col_offset, &row_offset);
++
++               col_offset = nir_imul(&b, col_offset, stride);
++
++               col_offset = nir_u2uN(&b, col_offset, deref->def.bit_size);
++               row_offset = nir_u2uN(&b, row_offset, deref->def.bit_size);
++
++               nir_deref_instr *iter_deref =
++                  nir_build_deref_ptr_as_array(&b, deref, col_offset);
++               iter_deref = nir_build_deref_cast(
++                  &b, &iter_deref->def, deref->modes,
++                  glsl_scalar_type(desc.element_type),
++                  glsl_base_type_bit_size(desc.element_type) / 8);
++               iter_deref =
++                  nir_build_deref_ptr_as_array(&b, iter_deref, row_offset);
++
++               nir_store_deref(&b, iter_deref, vars[idx], 1);
++            }
++
++            nir_instr_remove(instr);
++            progress = true;
++            break;
++         }
++         case nir_intrinsic_cmat_length: {
++            struct glsl_cmat_description matrix_desc =
++               nir_intrinsic_cmat_desc(intr);
++            nir_def_rewrite_uses(&intr->def,
++                                 nir_imm_int(&b, get_cmat_length(matrix_desc)));
++            nir_instr_remove(instr);
++            progress = true;
++            break;
++         }
++         case nir_intrinsic_cmat_muladd: {
++            nir_deref_instr *dst_deref =
++               nir_instr_as_deref(intr->src[0].ssa->parent_instr);
++            struct glsl_cmat_description d_desc =
++               *glsl_get_cmat_description(dst_deref->type);
++            struct glsl_cmat_description a_desc = *glsl_get_cmat_description(
++               nir_instr_as_deref(intr->src[1].ssa->parent_instr)->type);
++            struct glsl_cmat_description b_desc = *glsl_get_cmat_description(
++               nir_instr_as_deref(intr->src[2].ssa->parent_instr)->type);
++            struct glsl_cmat_description c_desc = *glsl_get_cmat_description(
++               nir_instr_as_deref(intr->src[3].ssa->parent_instr)->type);
++            nir_def *cmat_a = load_cmat(&b, intr->src[1].ssa);
++            nir_def *cmat_b = load_cmat(&b, intr->src[2].ssa);
++            nir_def *cmat_c = load_cmat(&b, intr->src[3].ssa);
++
++            nir_def *ret =
++               lower_cmat_muladd(&b, intr, cmat_a, cmat_b, cmat_c, a_desc,
++                                 b_desc, c_desc, d_desc, nak->sm);
++            nir_store_deref(&b, dst_deref, ret,
++                            nir_component_mask(ret->num_components));
++            nir_instr_remove(&intr->instr);
++            progress = true;
++            break;
++         }
++         case nir_intrinsic_cmat_unary_op: {
++            nir_def *src = load_cmat(&b, intr->src[1].ssa);
++            nir_def *ret = nir_build_alu1(&b, nir_intrinsic_alu_op(intr), src);
++
++            nir_store_deref(&b,
++                            nir_instr_as_deref(intr->src[0].ssa->parent_instr),
++                            ret, nir_component_mask(ret->num_components));
++            nir_instr_remove(instr);
++            progress = true;
++            break;
++         }
++         case nir_intrinsic_cmat_binary_op: {
++            nir_deref_instr *dst_deref =
++               nir_instr_as_deref(intr->src[0].ssa->parent_instr);
++            nir_def *src_a = load_cmat(&b, intr->src[1].ssa);
++            nir_def *src_b = load_cmat(&b, intr->src[2].ssa);
++            nir_op op = nir_intrinsic_alu_op(intr);
++
++            nir_def *ret = nir_build_alu2(&b, op, src_a, src_b);
++            nir_store_deref(&b, dst_deref, ret,
++                            nir_component_mask(ret->num_components));
++            nir_instr_remove(instr);
++            progress = true;
++            break;
++         }
++         case nir_intrinsic_cmat_scalar_op: {
++            nir_deref_instr *dst_deref =
++               nir_instr_as_deref(intr->src[0].ssa->parent_instr);
++            nir_def *src_a = load_cmat(&b, intr->src[1].ssa);
++            nir_op op = nir_intrinsic_alu_op(intr);
++            nir_def *ret = nir_build_alu2(&b, op, src_a, intr->src[2].ssa);
++            nir_store_deref(&b, dst_deref, ret,
++                            nir_component_mask(ret->num_components));
++            nir_instr_remove(instr);
++            progress = true;
++            break;
++         }
++         case nir_intrinsic_cmat_bitcast: {
++            nir_def *mat = load_cmat(&b, intr->src[1].ssa);
++            nir_store_deref(&b,
++                            nir_instr_as_deref(intr->src[0].ssa->parent_instr),
++                            mat, nir_component_mask(mat->num_components));
++            nir_instr_remove(instr);
++            progress = true;
++            break;
++         }
++         case nir_intrinsic_cmat_extract: {
++            nir_def *mat = load_cmat(&b, intr->src[0].ssa);
++            nir_def *index = intr->src[1].ssa;
++            nir_def *elem = nir_vector_extract(&b, mat, index);
++            nir_def_rewrite_uses(&intr->def, elem);
++            nir_instr_remove(instr);
++            progress = true;
++            break;
++         }
++         case nir_intrinsic_cmat_insert: {
++            nir_deref_instr *dst_deref =
++               nir_instr_as_deref(intr->src[0].ssa->parent_instr);
++            nir_def *elem = intr->src[1].ssa;
++            nir_def *mat = load_cmat(&b, intr->src[2].ssa);
++            nir_def *index = intr->src[3].ssa;
++
++            nir_def *r = nir_vector_insert(&b, mat, elem, index);
++            nir_store_deref(&b, dst_deref, r,
++                            nir_component_mask(r->num_components));
++            nir_instr_remove(instr);
++            progress = true;
++            break;
++         }
++         case nir_intrinsic_cmat_copy: {
++            nir_build_copy_deref(&b, intr->src[0].ssa, intr->src[1].ssa);
++            nir_instr_remove(instr);
++            progress = true;
++            break;
++         }
++         default:
++            break;
++         }
++      }
++   }
++
++   return progress;
++}
++
++bool
++nak_nir_lower_cooperative_matrix(nir_shader *nir,
++                                 const struct nak_compiler *nak)
++{
++   bool progress = false;
++
++   if (nir->info.stage != MESA_SHADER_COMPUTE ||
++       !nir->info.cs.has_cooperative_matrix)
++      return false;
++
++   struct hash_table *type_mapping = _mesa_pointer_hash_table_create(NULL);
++
++   /* Remap all cmat shader temp var to array of scalars */
++   nir_foreach_variable_with_modes(var, nir, nir_var_shader_temp) {
++      const struct glsl_type *new_type =
++         remap_matrix_type(type_mapping, var->type);
++
++      if (new_type != var->type) {
++         var->type = new_type;
++         progress = true;
++      }
++   }
++
++   nir_foreach_function_impl(impl, nir)
++      progress |=
++         nak_nir_lower_cooperative_matrix_impl(type_mapping, impl, nak);
++
++   nir_function_impl *impl = nir_shader_get_entrypoint(nir);
++
++   if (progress)
++      nir_metadata_preserve(impl, 0);
++   else
++      nir_metadata_preserve(impl, nir_metadata_all);
++
++   return progress;
++}
+diff --git a/src/nouveau/compiler/nak_private.h b/src/nouveau/compiler/nak_private.h
+index 22b0a8f34ec3660cb155658bd0c25f1f97b16da0..5d118aee3dfe3944fa1b375e640b143ce3feaa61 100644
+--- a/src/nouveau/compiler/nak_private.h
++++ b/src/nouveau/compiler/nak_private.h
+@@ -207,6 +207,23 @@ struct nak_nir_ipa_flags {
+    uint32_t pad:26;
+ };
+ 
++enum nak_cmat_type {
++   NAK_CMAT_TYPE_UNKNOWN,
++   NAK_CMAT_TYPE_M16N8K8,
++   NAK_CMAT_TYPE_M16N8K16,
++   NAK_CMAT_TYPE_M16N16K16,
++   NAK_CMAT_TYPE_M8N8K16,
++   NAK_CMAT_TYPE_M16N8K32,
++   NAK_CMAT_TYPE_M16N16K32,
++};
++
++struct nak_nir_cmat_mul_add_flags {
++   enum nak_cmat_type cmat_type:3;
++   uint8_t a_type:5; /* enum glsl_base_type */
++   uint8_t b_type:5; /* enum glsl_base_type */
++   uint32_t pad:19;
++};
++
+ bool nak_nir_lower_fs_inputs(nir_shader *nir,
+                              const struct nak_compiler *nak,
+                              const struct nak_fs_key *fs_key);
+@@ -231,6 +248,7 @@ bool nak_nir_split_64bit_conversions(nir_shader *nir);
+ bool nak_nir_lower_non_uniform_ldcx(nir_shader *nir);
+ bool nak_nir_add_barriers(nir_shader *nir, const struct nak_compiler *nak);
+ bool nak_nir_lower_cf(nir_shader *nir);
++bool nak_nir_lower_cooperative_matrix(nir_shader *shader, const struct nak_compiler *nak);
+ 
+ void nak_optimize_nir(nir_shader *nir, const struct nak_compiler *nak);
+ 
+diff --git a/src/nouveau/vulkan/nvk_physical_device.c b/src/nouveau/vulkan/nvk_physical_device.c
+index 84056c49e9090d2ee157b5dc0c3030ecde18abf1..933905f3ce33c36162752f1ec21800fac3f50f91 100644
+--- a/src/nouveau/vulkan/nvk_physical_device.c
++++ b/src/nouveau/vulkan/nvk_physical_device.c
+@@ -106,6 +106,7 @@ nvk_get_device_extensions(const struct nvk_instance *instance,
+       .KHR_bind_memory2 = true,
+       .KHR_buffer_device_address = true,
+       .KHR_calibrated_timestamps = true,
++      .KHR_cooperative_matrix = info->cls_eng3d >= TURING_A && nvk_use_nak(info),
+       .KHR_compute_shader_derivatives = nvk_use_nak(info),
+       .KHR_copy_commands2 = true,
+       .KHR_create_renderpass2 = true,
+@@ -298,6 +299,9 @@ nvk_get_device_features(const struct nv_device_info *info,
+                         const struct vk_device_extension_table *supported_extensions,
+                         struct vk_features *features)
+ {
++   /* TU11x uses the same shader model as other Turing but don't support the same features. */
++   bool is_tu11x = info->chipset == 0x167 || info->chipset == 0x168;
++
+    *features = (struct vk_features) {
+       /* Vulkan 1.0 */
+       .robustBufferAccess = true,
+@@ -458,6 +462,11 @@ nvk_get_device_features(const struct nv_device_info *info,
+       .hostImageCopy = info->cls_eng3d >= TURING_A,
+       .pushDescriptor = true,
+ 
++      /* VK_KHR_cooperative_matrix */
++      /* TU11X can run coop matrix but the performances are abysal */
++      .cooperativeMatrix = info->cls_eng3d >= TURING_A && !is_tu11x && nvk_use_nak(info),
++      .cooperativeMatrixRobustBufferAccess = false,
++
+       /* VK_KHR_compute_shader_derivatives */
+       .computeDerivativeGroupQuads = true,
+       .computeDerivativeGroupLinear = true,
+@@ -965,6 +974,9 @@ nvk_get_device_properties(const struct nvk_instance *instance,
+       .defaultRobustnessImages =
+          VK_PIPELINE_ROBUSTNESS_IMAGE_BEHAVIOR_ROBUST_IMAGE_ACCESS_2_EXT,
+ 
++      /* VK_KHR_cooperative_matrix */
++      .cooperativeMatrixSupportedStages = VK_SHADER_STAGE_COMPUTE_BIT,
++
+       /* VK_KHR_compute_shader_derivatives */
+       .meshAndTaskShaderDerivatives = false,
+ 
+@@ -1704,3 +1716,89 @@ nvk_GetPhysicalDeviceFragmentShadingRatesKHR(
+ 
+    return vk_outarray_status(&out);
+ }
++
++VKAPI_ATTR VkResult VKAPI_CALL
++nvk_GetPhysicalDeviceCooperativeMatrixPropertiesKHR(VkPhysicalDevice physicalDevice, uint32_t *pPropertyCount,
++                                                    VkCooperativeMatrixPropertiesKHR *pProperties)
++{
++   VK_OUTARRAY_MAKE_TYPED(VkCooperativeMatrixPropertiesKHR, out, pProperties, pPropertyCount);
++
++   for (int use_result_f32 = 0; use_result_f32 < 2; use_result_f32++) {
++      vk_outarray_append_typed(VkCooperativeMatrixPropertiesKHR, &out, p)
++      {
++         *p = (struct VkCooperativeMatrixPropertiesKHR){.sType = VK_STRUCTURE_TYPE_COOPERATIVE_MATRIX_PROPERTIES_KHR,
++                                                        .MSize = 16,
++                                                        .NSize = 16,
++                                                        .KSize = 16,
++                                                        .AType = VK_COMPONENT_TYPE_FLOAT16_KHR,
++                                                        .BType = VK_COMPONENT_TYPE_FLOAT16_KHR,
++                                                        .CType = use_result_f32 ? VK_COMPONENT_TYPE_FLOAT32_KHR : VK_COMPONENT_TYPE_FLOAT16_KHR,
++                                                        .ResultType = use_result_f32 ? VK_COMPONENT_TYPE_FLOAT32_KHR : VK_COMPONENT_TYPE_FLOAT16_KHR,
++                                                        .saturatingAccumulation = false,
++                                                        .scope = VK_SCOPE_SUBGROUP_KHR};
++      }
++
++      vk_outarray_append_typed(VkCooperativeMatrixPropertiesKHR, &out, p)
++      {
++         *p = (struct VkCooperativeMatrixPropertiesKHR){.sType = VK_STRUCTURE_TYPE_COOPERATIVE_MATRIX_PROPERTIES_KHR,
++                                                        .MSize = 16,
++                                                        .NSize = 8,
++                                                        .KSize = 16,
++                                                        .AType = VK_COMPONENT_TYPE_FLOAT16_KHR,
++                                                        .BType = VK_COMPONENT_TYPE_FLOAT16_KHR,
++                                                        .CType = use_result_f32 ? VK_COMPONENT_TYPE_FLOAT32_KHR : VK_COMPONENT_TYPE_FLOAT16_KHR,
++                                                        .ResultType = use_result_f32 ? VK_COMPONENT_TYPE_FLOAT32_KHR : VK_COMPONENT_TYPE_FLOAT16_KHR,
++                                                        .saturatingAccumulation = false,
++                                                        .scope = VK_SCOPE_SUBGROUP_KHR};
++      }
++
++      vk_outarray_append_typed(VkCooperativeMatrixPropertiesKHR, &out, p)
++      {
++         *p = (struct VkCooperativeMatrixPropertiesKHR){.sType = VK_STRUCTURE_TYPE_COOPERATIVE_MATRIX_PROPERTIES_KHR,
++                                                        .MSize = 16,
++                                                        .NSize = 8,
++                                                        .KSize = 8,
++                                                        .AType = VK_COMPONENT_TYPE_FLOAT16_KHR,
++                                                        .BType = VK_COMPONENT_TYPE_FLOAT16_KHR,
++                                                        .CType = use_result_f32 ? VK_COMPONENT_TYPE_FLOAT32_KHR : VK_COMPONENT_TYPE_FLOAT16_KHR,
++                                                        .ResultType = use_result_f32 ? VK_COMPONENT_TYPE_FLOAT32_KHR : VK_COMPONENT_TYPE_FLOAT16_KHR,
++                                                        .saturatingAccumulation = false,
++                                                        .scope = VK_SCOPE_SUBGROUP_KHR};
++      }
++   }
++
++   for (unsigned is_signed = 0; is_signed < 2; is_signed++) {
++      const VkComponentTypeKHR input_type = is_signed ? VK_COMPONENT_TYPE_SINT8_KHR : VK_COMPONENT_TYPE_UINT8_KHR;
++      const VkComponentTypeKHR result_type = is_signed ? VK_COMPONENT_TYPE_SINT32_KHR : VK_COMPONENT_TYPE_UINT32_KHR;
++
++      vk_outarray_append_typed(VkCooperativeMatrixPropertiesKHR, &out, p)
++      {
++         *p = (struct VkCooperativeMatrixPropertiesKHR){.sType = VK_STRUCTURE_TYPE_COOPERATIVE_MATRIX_PROPERTIES_KHR,
++                                                        .MSize = 16,
++                                                        .NSize = 16,
++                                                        .KSize = 32,
++                                                        .AType = input_type,
++                                                        .BType = input_type,
++                                                        .CType = result_type,
++                                                        .ResultType = result_type,
++                                                        .saturatingAccumulation = false,
++                                                        .scope = VK_SCOPE_SUBGROUP_KHR};
++      }
++
++      vk_outarray_append_typed(VkCooperativeMatrixPropertiesKHR, &out, p)
++      {
++         *p = (struct VkCooperativeMatrixPropertiesKHR){.sType = VK_STRUCTURE_TYPE_COOPERATIVE_MATRIX_PROPERTIES_KHR,
++                                                        .MSize = 16,
++                                                        .NSize = 8,
++                                                        .KSize = 32,
++                                                        .AType = input_type,
++                                                        .BType = input_type,
++                                                        .CType = result_type,
++                                                        .ResultType = result_type,
++                                                        .saturatingAccumulation = false,
++                                                        .scope = VK_SCOPE_SUBGROUP_KHR};
++      }
++   }
++
++   return vk_outarray_status(&out);
++}
