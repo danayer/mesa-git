@@ -92,8 +92,6 @@ Source1:        Mesa-MLAA-License-Clarification-Email.txt
 
 Patch10:        gnome-shell-glthread-disable.patch
 Patch11:        NVK-LOAD-ZINK.patch
-Patch12:        NAK-bound-tex.patch
-Patch13:        NVK-VK_KHR_cooperative_matrix.patch
 
 BuildRequires:  meson >= 1.5.0
 BuildRequires:  gcc
