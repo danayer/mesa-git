@@ -230,6 +230,8 @@ Summary:        Mesa libEGL runtime libraries
 Requires:       libglvnd-egl%{?_isa} >= 1:1.3.2
 Requires:       %{name}-libgbm%{?_isa} = %{?epoch:%{epoch}:}%{version}-%{release}
 Recommends:     %{name}-dri-drivers%{?_isa} = %{?epoch:%{epoch}:}%{version}-%{release}
+Obsoletes:      libOSMesa < %{?epoch:%{epoch}:}%{version}-%{release}
+
 
 %description libEGL
 %{summary}.
@@ -241,6 +243,7 @@ Requires:       libglvnd-devel%{?_isa} >= 1:1.3.2
 Requires:       %{name}-khr-devel%{?_isa}
 Provides:       libEGL-devel
 Provides:       libEGL-devel%{?_isa}
+Obsoletes:      libOSMesa-devel < %{?epoch:%{epoch}:}%{version}-%{release
 
 %description libEGL-devel
 %{summary}.
@@ -273,21 +276,6 @@ Requires:       %{name}-filesystem%{?_isa} = %{?epoch:%{epoch}:}%{version}-%{rel
 %description vdpau-drivers
 %{summary}.
 %endif
-
-%package libOSMesa
-Summary:        Mesa offscreen rendering libraries
-Provides:       libOSMesa
-Provides:       libOSMesa%{?_isa}
-
-%description libOSMesa
-%{summary}.
-
-%package libOSMesa-devel
-Summary:        Mesa offscreen rendering development package
-Requires:       %{name}-libOSMesa%{?_isa} = %{?epoch:%{epoch}:}%{version}-%{release}
-
-%description libOSMesa-devel
-%{summary}.
 
 %package libgbm
 Summary:        Mesa gbm runtime library
@@ -409,7 +397,6 @@ export MESON_PACKAGE_CACHE_DIR="%{cargo_registry}/"
 
 %meson \
   -Dplatforms=x11,wayland \
-  -Dosmesa=true \
 %if 0%{?with_hardware}
   -Dgallium-drivers=softpipe,llvmpipe,virgl%{?with_d3d12:,d3d12},nouveau%{?with_r300:,r300}%{?with_crocus:,crocus}%{?with_i915:,i915}%{?with_iris:,iris}%{?with_vmware:,svga}%{?with_radeonsi:,radeonsi}%{?with_r600:,r600}%{?with_freedreno:,freedreno}%{?with_etnaviv:,etnaviv}%{?with_tegra:,tegra}%{?with_vc4:,vc4}%{?with_v3d:,v3d}%{?with_lima:,lima}%{?with_panfrost:,panfrost}%{?with_vulkan_hw:,zink} \
 %else
@@ -480,7 +467,7 @@ ln -s %{_libdir}/libGLX_mesa.so.0 %{buildroot}%{_libdir}/libGLX_system.so.0
 
 # this keeps breaking, check it early.  note that the exit from eu-ftr is odd.
 pushd %{buildroot}%{_libdir}
-for i in libOSMesa*.so libGL.so ; do
+for i in libGL*.so ; do
     eu-findtextrel $i && exit 1
 done
 popd
@@ -506,14 +493,6 @@ popd
 %dir %{_includedir}/EGL
 %{_includedir}/EGL/eglext_angle.h
 %{_includedir}/EGL/eglmesaext.h
-
-%files libOSMesa
-%{_libdir}/libOSMesa.so.8*
-%files libOSMesa-devel
-%dir %{_includedir}/GL
-%{_includedir}/GL/osmesa.h
-%{_libdir}/libOSMesa.so
-%{_libdir}/pkgconfig/osmesa.pc
 
 %files libgbm
 %{_libdir}/libgbm.so.1
