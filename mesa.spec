@@ -91,7 +91,6 @@ Source0:        https://gitlab.freedesktop.org/mesa/mesa/-/archive/%{commit}.tar
 Source1:        Mesa-MLAA-License-Clarification-Email.txt
 
 Patch10:        gnome-shell-glthread-disable.patch
-Patch11:        NVK-LOAD-ZINK.patch
 
 BuildRequires:  meson >= 1.5.0
 BuildRequires:  gcc
