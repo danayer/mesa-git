@@ -242,7 +242,7 @@ Requires:       libglvnd-devel%{?_isa} >= 1:1.3.2
 Requires:       %{name}-khr-devel%{?_isa}
 Provides:       libEGL-devel
 Provides:       libEGL-devel%{?_isa}
-Obsoletes:      libOSMesa-devel < %{?epoch:%{epoch}:}%{version}-%{release
+Obsoletes:      libOSMesa-devel < %{?epoch:%{epoch}:}%{version}-%{release}
 
 %description libEGL-devel
 %{summary}.
