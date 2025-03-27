@@ -71,13 +71,13 @@
 %global with_vulkan_overlay 1
 %global with_gallium_extra_hud 1
 
-%global commit ae8c0b06a7e37c4ffd6fd5d8285f32df48c5631c
-%global shortcommit ae8c0b0
+%global commit 1e72fbcfd1e6ab5fad3d429f7c149daa17d979c2
+%global shortcommit 1e72fbc
 
 Name:           mesa
 Summary:        Mesa graphics libraries
 Version:        25.1.0
-Release: 0.204.git%{shortcommit}%{?dist}
+Release: 0.205.git%{shortcommit}%{?dist}
 
 License:        MIT AND BSD-3-Clause AND SGI-B-2.0
 URL:            http://www.mesa3d.org
