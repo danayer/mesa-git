@@ -428,7 +428,7 @@ export MESON_PACKAGE_CACHE_DIR="%{cargo_registry}/"
   -Dintel-clc=enabled \
 %endif
   -Dintel-rt=%{?with_intel_vk_rt:enabled}%{!?with_intel_vk_rt:disabled} \
-  -Dmicrosoft-clc=disabled \
+  -Dmicrosoft-clc=enabled \
   -Dllvm=enabled \
   -Dshared-llvm=enabled \
   -Dvalgrind=%{?with_valgrind:enabled}%{!?with_valgrind:disabled} \
@@ -689,6 +689,13 @@ popd
 %{_datadir}/vulkan/implicit_layer.d/VkLayer_MESA_device_select.json
 %{_libdir}/libVkLayer_INTEL_nullhw.so
 %{_datadir}/vulkan/explicit_layer.d/VkLayer_INTEL_nullhw.json
+%if 0%{?with_d3d12}
+%{_bindir}/spirv2dxil
+%{_libdir}/libspirv_to_dxil.so
+%{_libdir}/libspirv_to_dxil.a
+%{_libdir}/libvulkan_dzn.so
+%{_datadir}/vulkan/icd.d/dzn_icd.*.json
+%endif
 %if 0%{?with_vulkan_hw}
 %{_libdir}/libvulkan_radeon.so
 %{_datadir}/drirc.d/00-radv-defaults.conf
