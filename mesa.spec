@@ -695,6 +695,7 @@ popd
 %{_libdir}/libspirv_to_dxil.a
 %{_libdir}/libvulkan_dzn.so
 %{_datadir}/vulkan/icd.d/dzn_icd.*.json
+%{_libdir}/clon12compiler.so
 %endif
 %if 0%{?with_vulkan_hw}
 %{_libdir}/libvulkan_radeon.so
