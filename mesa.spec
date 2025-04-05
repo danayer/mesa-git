@@ -428,7 +428,7 @@ export MESON_PACKAGE_CACHE_DIR="%{cargo_registry}/"
   -Dintel-clc=enabled \
 %endif
   -Dintel-rt=%{?with_intel_vk_rt:enabled}%{!?with_intel_vk_rt:disabled} \
-  -Dmicrosoft-clc=disabled \
+  -Dmicrosoft-clc=enabled \
   -Dllvm=enabled \
   -Dshared-llvm=enabled \
   -Dvalgrind=%{?with_valgrind:enabled}%{!?with_valgrind:disabled} \
