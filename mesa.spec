@@ -499,6 +499,7 @@ popd
 %files libgbm-devel
 %{_libdir}/libgbm.so
 %{_includedir}/gbm.h
+%{_includedir}/gbm_backend_abi.h
 %{_libdir}/pkgconfig/gbm.pc
 
 %if 0%{?with_xa}
@@ -554,6 +555,7 @@ popd
 %{_libdir}/dri/libdril_dri.so
 %{_libdir}/dri/swrast_dri.so
 %{_libdir}/dri/virtio_gpu_dri.so
+%{_libdir}/dri/apple_dri.so
 %if 0%{?with_d3d12}
 %{_libdir}/dri/d3d12_dri.so
 %endif
