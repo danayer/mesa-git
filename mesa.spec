@@ -48,7 +48,7 @@
 %global with_vulkan_overlay 1
 %global with_gallium_extra_hud 1
 %global with_vulkan_beta 1
-%global with_perfetto 1
+%global with_perfetto 0
 %global with_gpuvis 1
 %global with_spirv_to_dxil 1
 %global with_mesa_tools 1
@@ -176,12 +176,12 @@ BuildRequires:  pkgconfig(vulkan)
 %if 0%{?with_vulkan_overlay}
 BuildRequires: glslang
 %endif
-## perfetto requires
-%if 0%{?with_perfetto}
-BuildRequires: perfetto-libs
-BuildRequires: perfetto-sdk
-BuildRequires: perfetto
-%endif
+## Remove perfetto requires since the packages aren't available
+# %if 0%{?with_perfetto}
+# BuildRequires: perfetto-libs
+# BuildRequires: perfetto-sdk
+# BuildRequires: perfetto
+# %endif
 
 %description
 %{summary}.
@@ -365,7 +365,7 @@ export MESON_PACKAGE_CACHE_DIR="%{cargo_registry}/"
   -Dvulkan-drivers=%{?vulkan_drivers} \
   -Dvulkan-layers=intel-nullhw,device-select,overlay,screenshot,vram-report-limit \
   -Dvulkan-beta=%{?with_vulkan_beta:true}%{!?with_vulkan_beta:false} \
-  -Dperfetto=%{?with_perfetto:true}%{!?with_perfetto:false} \
+  -Dperfetto=false \
   -Dgpuvis=%{?with_gpuvis:true}%{!?with_gpuvis:false} \
   -Dspirv-to-dxil=%{?with_spirv_to_dxil:true}%{!?with_spirv_to_dxil:false} \
 %if 0%{?with_mesa_tools}
