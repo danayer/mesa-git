@@ -48,11 +48,12 @@
 %global with_vulkan_overlay 1
 %global with_gallium_extra_hud 1
 %global with_vulkan_beta 1
-%global with_perfetto 0
-%global with_gpuvis 0
+%global with_perfetto 1
+%global with_gpuvis 1
 %global with_spirv_to_dxil 1
-%global with_mesa_tools 0
+%global with_mesa_tools 1
 %global with_xlib_lease 1
+%global with_teflon 1
 
 %global commit cbc1ec4f73483df36968dd54274f5f03a1b95851
 %global shortcommit cbc1ec4
@@ -356,13 +357,13 @@ export MESON_PACKAGE_CACHE_DIR="%{cargo_registry}/"
 %endif
   -Dgallium-extra-hud=%{?with_gallium_extra_hud:true}%{!?with_gallium_extra_hud:false} \
   -Dvulkan-drivers=%{?vulkan_drivers} \
-  -Dvulkan-layers=intel-nullhw,device-select%{?with_vulkan_overlay:,overlay} \
+  -Dvulkan-layers=intel-nullhw,device-select,overlay,screenshot,vram-report-limit \
   -Dvulkan-beta=%{?with_vulkan_beta:true}%{!?with_vulkan_beta:false} \
-  -Dperfetto=false \
+  -Dperfetto=%{?with_perfetto:true}%{!?with_perfetto:false} \
   -Dgpuvis=%{?with_gpuvis:true}%{!?with_gpuvis:false} \
   -Dspirv-to-dxil=%{?with_spirv_to_dxil:true}%{!?with_spirv_to_dxil:false} \
 %if 0%{?with_mesa_tools}
-  -Dtools=drm-shim,glsl,intel,nir,nouveau \
+  -Dtools=drm-shim,glsl,intel,nir,nouveau,all \
 %endif
   -Dxlib-lease=%{?with_xlib_lease:enabled}%{!?with_xlib_lease:disabled} \
   -Dgles1=enabled \
@@ -475,7 +476,7 @@ popd
 %{_libdir}/dri/libdril_dri.so
 %{_libdir}/dri/swrast_dri.so
 %{_libdir}/dri/virtio_gpu_dri.so
-%{_libdir}/dri/apple_dri.so
+# apple_dri.so doesn't exist in the build - removing
 %if 0%{?with_d3d12}
 %{_libdir}/dri/d3d12_dri.so
 %endif
@@ -495,10 +496,6 @@ popd
 %{_libdir}/dri/nouveau_dri.so
 %if 0%{?with_vmware}
 %{_libdir}/dri/vmwgfx_dri.so
-%endif
-%if 0%{?with_opencl}
-%dir %{_libdir}/gallium-pipe
-%{_libdir}/gallium-pipe/*.so
 %endif
 %if 0%{?with_vulkan_hw}
 %{_libdir}/dri/zink_dri.so
