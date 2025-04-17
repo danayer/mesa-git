@@ -172,6 +172,7 @@ BuildRequires:  glslang
 BuildRequires:  pkgconfig(libpng)
 # Required for intel UI tools
 BuildRequires:  pkgconfig(epoxy)
+BuildRequires:  pkgconfig(gtk+-3.0)
 %if 0%{?with_vulkan_hw}
 BuildRequires:  pkgconfig(vulkan)
 %endif
