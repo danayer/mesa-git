@@ -363,7 +363,11 @@ export MESON_PACKAGE_CACHE_DIR="%{cargo_registry}/"
   -Dgpuvis=%{?with_gpuvis:true}%{!?with_gpuvis:false} \
   -Dspirv-to-dxil=%{?with_spirv_to_dxil:true}%{!?with_spirv_to_dxil:false} \
 %if 0%{?with_mesa_tools}
+%ifarch x86_64
+  -Dtools=drm-shim,glsl,intel,nir,nouveau,freedreno,all \
+%else
   -Dtools=drm-shim,glsl,intel,nir,nouveau,all \
+%endif
 %endif
   -Dxlib-lease=%{?with_xlib_lease:enabled}%{!?with_xlib_lease:disabled} \
   -Dgles1=enabled \
