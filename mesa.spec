@@ -176,6 +176,12 @@ BuildRequires:  pkgconfig(vulkan)
 %if 0%{?with_vulkan_overlay}
 BuildRequires: glslang
 %endif
+## perfetto requires
+%if 0%{?with_perfetto}
+BuildRequires: perfetto-libs
+BuildRequires: perfetto-sdk
+BuildRequires: perfetto
+%endif
 
 %description
 %{summary}.
