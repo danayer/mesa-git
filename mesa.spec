@@ -363,7 +363,7 @@ export MESON_PACKAGE_CACHE_DIR="%{cargo_registry}/"
   -Dgpuvis=%{?with_gpuvis:true}%{!?with_gpuvis:false} \
   -Dspirv-to-dxil=%{?with_spirv_to_dxil:true}%{!?with_spirv_to_dxil:false} \
 %if 0%{?with_mesa_tools}
-  -Dtools=drm-shim,glsl,intel,nir,nouveau,all,-freedreno \
+  -Dtools=drm-shim,glsl,intel,intel-ui,nir,nouveau,dlclose-skip \
 %endif
   -Dxlib-lease=%{?with_xlib_lease:enabled}%{!?with_xlib_lease:disabled} \
   -Dgles1=enabled \
@@ -607,7 +607,6 @@ popd
 
 # DRM shim libraries
 %{_libdir}/libamdgpu_noop_drm_shim.so
-%{_libdir}/libasahi_noop_drm_shim.so
 %{_libdir}/libdlclose-skip.so
 %{_libdir}/libintel_noop_drm_shim.so
 %{_libdir}/libnouveau_noop_drm_shim.so
