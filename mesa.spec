@@ -577,14 +577,6 @@ popd
 %{_bindir}/spirv2nir
 %{_bindir}/mesa-screenshot-control.py
 
-# Freedreno tools
-%{_bindir}/afuc-asm
-%{_bindir}/afuc-disasm
-%{_bindir}/crashdec
-%{_bindir}/nv_mme_dump
-%{_bindir}/nv_push_dump
-%{_datadir}/freedreno/
-
 # Intel tools
 %{_bindir}/aubinator
 %{_bindir}/aubinator_error_decode
@@ -603,8 +595,8 @@ popd
 %{_bindir}/intel_monitor
 %{_bindir}/intel_sanitize_gpu
 %{_bindir}/intel_stub_gpu
-%{_libexec}/libintel_dump_gpu.so
-%{_libexec}/libintel_sanitize_gpu.so
+/usr/libexec/libintel_dump_gpu.so
+/usr/libexec/libintel_sanitize_gpu.so
 
 # DRM shim libraries
 %{_libdir}/libamdgpu_noop_drm_shim.so
@@ -614,6 +606,16 @@ popd
 %{_libdir}/libintel_noop_drm_shim.so
 %{_libdir}/libnouveau_noop_drm_shim.so
 %{_libdir}/libradeon_noop_drm_shim.so
+
+# Freedreno tools (only available on x86_64)
+%ifarch x86_64
+%{_bindir}/afuc-asm
+%{_bindir}/afuc-disasm
+%{_bindir}/crashdec
+%{_bindir}/nv_mme_dump
+%{_bindir}/nv_push_dump
+%{_datadir}/freedreno/
+%endif
 %endif
 
 %changelog
