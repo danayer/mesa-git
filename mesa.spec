@@ -309,6 +309,16 @@ Obsoletes:      mesa-vulkan-devel < %{?epoch:%{epoch}:}%{version}-%{release}
 %description vulkan-drivers
 The drivers with support for the Vulkan API.
 
+%if 0%{?with_mesa_tools}
+%package tools
+Summary:        Mesa development and debugging tools
+Requires:       %{name}-filesystem%{?_isa} = %{?epoch:%{epoch}:}%{version}-%{release}
+
+%description tools
+Mesa development and debugging tools. Includes tools for debugging
+drivers, inspecting GPU state, compiler tools, and more.
+%endif
+
 %prep
 %autosetup -n mesa-%{commit} -p1
 cp %{SOURCE1} docs/
@@ -398,6 +408,11 @@ rm -vf %{buildroot}%{_libdir}/libGLX_mesa.so
 rm -vf %{buildroot}%{_libdir}/libEGL_mesa.so
 # XXX can we just not build this
 rm -vf %{buildroot}%{_libdir}/libGLES*
+# We don't want libxatracker, since XA is deprecated and disabled
+rm -vf %{buildroot}%{_libdir}/libxatracker.so*
+rm -vf %{buildroot}%{_libdir}/pkgconfig/xatracker.pc
+rm -vf %{buildroot}%{_includedir}/xa_*.h
+rm -vf %{buildroot}%{_includedir}/xa_tracker.h
 
 # glvnd needs a default provider for indirect rendering where it cannot
 # determine the vendor
@@ -523,6 +538,10 @@ popd
 %{_datadir}/vulkan/implicit_layer.d/VkLayer_MESA_device_select.json
 %{_libdir}/libVkLayer_INTEL_nullhw.so
 %{_datadir}/vulkan/explicit_layer.d/VkLayer_INTEL_nullhw.json
+%{_libdir}/libVkLayer_MESA_screenshot.so
+%{_datadir}/vulkan/explicit_layer.d/VkLayer_MESA_screenshot.json
+%{_libdir}/libVkLayer_MESA_vram_report_limit.so
+%{_datadir}/vulkan/explicit_layer.d/VkLayer_MESA_vram_report_limit.json
 %if 0%{?with_d3d12}
 %{_bindir}/spirv2dxil
 %{_libdir}/libspirv_to_dxil.so
@@ -549,6 +568,52 @@ popd
 %{_bindir}/mesa-overlay-control.py
 %{_libdir}/libVkLayer_MESA_overlay.so
 %{_datadir}/vulkan/explicit_layer.d/VkLayer_MESA_overlay.json
+%endif
+
+%if 0%{?with_mesa_tools}
+%files tools
+# General development tools
+%{_bindir}/glsl_compiler
+%{_bindir}/spirv2nir
+%{_bindir}/mesa-screenshot-control.py
+
+# Freedreno tools
+%{_bindir}/afuc-asm
+%{_bindir}/afuc-disasm
+%{_bindir}/crashdec
+%{_bindir}/nv_mme_dump
+%{_bindir}/nv_push_dump
+%{_datadir}/freedreno/
+
+# Intel tools
+%{_bindir}/aubinator
+%{_bindir}/aubinator_error_decode
+%{_bindir}/aubinator_viewer
+%{_bindir}/brw_asm
+%{_bindir}/brw_disasm
+%{_bindir}/computerator
+%{_bindir}/elk_asm
+%{_bindir}/elk_disasm
+%{_bindir}/intel_dev_info
+%{_bindir}/intel_dump_gpu
+%{_bindir}/intel_error2aub
+%{_bindir}/intel_error2hangdump
+%{_bindir}/intel_hang_replay
+%{_bindir}/intel_hang_viewer
+%{_bindir}/intel_monitor
+%{_bindir}/intel_sanitize_gpu
+%{_bindir}/intel_stub_gpu
+%{_libexec}/libintel_dump_gpu.so
+%{_libexec}/libintel_sanitize_gpu.so
+
+# DRM shim libraries
+%{_libdir}/libamdgpu_noop_drm_shim.so
+%{_libdir}/libasahi_noop_drm_shim.so
+%{_libdir}/libdlclose-skip.so
+%{_libdir}/libfreedreno_noop_drm_shim.so
+%{_libdir}/libintel_noop_drm_shim.so
+%{_libdir}/libnouveau_noop_drm_shim.so
+%{_libdir}/libradeon_noop_drm_shim.so
 %endif
 
 %changelog
