@@ -169,10 +169,12 @@ BuildRequires:  python3-pycparser
 BuildRequires:  python3-pyyaml
 BuildRequires:  vulkan-headers
 BuildRequires:  glslang
-BuildRequires:  pkgconfig(libpng)  # Required for vulkan screenshot layer
+# Required for vulkan screenshot layer
+BuildRequires:  pkgconfig(libpng)
 %if 0%{?with_vulkan_hw}
 BuildRequires:  pkgconfig(vulkan)
 %endif
+
 ## vulkan hud requires
 %if 0%{?with_vulkan_overlay}
 BuildRequires: glslang
