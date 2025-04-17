@@ -383,7 +383,7 @@ export MESON_PACKAGE_CACHE_DIR="%{cargo_registry}/"
   -Dvulkan-drivers=%{?vulkan_drivers} \
   -Dvulkan-layers=intel-nullhw,device-select%{?with_vulkan_overlay:,overlay} \
   -Dvulkan-beta=%{?with_vulkan_beta:true}%{!?with_vulkan_beta:false} \
-  -Dperfetto=%{?with_perfetto:true}%{!?with_perfetto:false} \
+  -Dperfetto=disabled \
   -Dgpuvis=%{?with_gpuvis:true}%{!?with_gpuvis:false} \
   -Dspirv-to-dxil=%{?with_spirv_to_dxil:true}%{!?with_spirv_to_dxil:false} \
 %if 0%{?with_mesa_tools}
