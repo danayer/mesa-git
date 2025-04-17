@@ -58,8 +58,8 @@
 
 Name:           mesa
 Summary:        Mesa graphics libraries
-Version:        25.1.0
-Release: 0.288.git%{shortcommit}%{?dist}
+Version:        25.2.0
+Release: 0.1.git%{shortcommit}%{?dist}
 
 License:        MIT AND BSD-3-Clause AND SGI-B-2.0
 URL:            http://www.mesa3d.org
@@ -363,11 +363,7 @@ export MESON_PACKAGE_CACHE_DIR="%{cargo_registry}/"
   -Dgpuvis=%{?with_gpuvis:true}%{!?with_gpuvis:false} \
   -Dspirv-to-dxil=%{?with_spirv_to_dxil:true}%{!?with_spirv_to_dxil:false} \
 %if 0%{?with_mesa_tools}
-%ifarch x86_64
-  -Dtools=drm-shim,glsl,intel,nir,nouveau,freedreno,all \
-%else
   -Dtools=drm-shim,glsl,intel,nir,nouveau,all \
-%endif
 %endif
   -Dxlib-lease=%{?with_xlib_lease:enabled}%{!?with_xlib_lease:disabled} \
   -Dgles1=enabled \
@@ -606,20 +602,13 @@ popd
 %{_libdir}/libamdgpu_noop_drm_shim.so
 %{_libdir}/libasahi_noop_drm_shim.so
 %{_libdir}/libdlclose-skip.so
-%{_libdir}/libfreedreno_noop_drm_shim.so
 %{_libdir}/libintel_noop_drm_shim.so
 %{_libdir}/libnouveau_noop_drm_shim.so
 %{_libdir}/libradeon_noop_drm_shim.so
 
-# Freedreno tools (only available on x86_64)
-%ifarch x86_64
-%{_bindir}/afuc-asm
-%{_bindir}/afuc-disasm
-%{_bindir}/crashdec
+# Nouveau tools
 %{_bindir}/nv_mme_dump
 %{_bindir}/nv_push_dump
-%{_datadir}/freedreno/
-%endif
 %endif
 
 %changelog
