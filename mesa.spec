@@ -53,13 +53,13 @@
 %global with_mesa_tools 1
 %global with_xlib_lease 1
 
-%global commit c37a468a8a109cbaece70760fd748fc838185b88
-%global shortcommit c37a468
+%global commit cbc1ec4f73483df36968dd54274f5f03a1b95851
+%global shortcommit cbc1ec4
 
 Name:           mesa
 Summary:        Mesa graphics libraries
-Version:        25.2.0
-Release: 0.2.git%{shortcommit}%{?dist}
+Version:        25.1.0
+Release: 0.288.git%{shortcommit}%{?dist}
 
 License:        MIT AND BSD-3-Clause AND SGI-B-2.0
 URL:            http://www.mesa3d.org
@@ -363,7 +363,7 @@ export MESON_PACKAGE_CACHE_DIR="%{cargo_registry}/"
   -Dgpuvis=%{?with_gpuvis:true}%{!?with_gpuvis:false} \
   -Dspirv-to-dxil=%{?with_spirv_to_dxil:true}%{!?with_spirv_to_dxil:false} \
 %if 0%{?with_mesa_tools}
-  -Dtools=drm-shim,glsl,intel,nir,nouveau,all \
+  -Dtools=drm-shim,glsl,intel,nir,nouveau,all,-freedreno \
 %endif
   -Dxlib-lease=%{?with_xlib_lease:enabled}%{!?with_xlib_lease:disabled} \
   -Dgles1=enabled \
@@ -413,6 +413,13 @@ rm -vf %{buildroot}%{_libdir}/libxatracker.so*
 rm -vf %{buildroot}%{_libdir}/pkgconfig/xatracker.pc
 rm -vf %{buildroot}%{_includedir}/xa_*.h
 rm -vf %{buildroot}%{_includedir}/xa_tracker.h
+
+# Remove all freedreno files - they're for ARM platforms
+rm -vf %{buildroot}%{_bindir}/afuc-asm
+rm -vf %{buildroot}%{_bindir}/afuc-disasm
+rm -vf %{buildroot}%{_bindir}/crashdec
+rm -vf %{buildroot}%{_libdir}/libfreedreno_noop_drm_shim.so
+rm -rf %{buildroot}%{_datadir}/freedreno/
 
 # glvnd needs a default provider for indirect rendering where it cannot
 # determine the vendor
