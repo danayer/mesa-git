@@ -52,7 +52,6 @@
 %global with_spirv_to_dxil 1
 %global with_mesa_tools 1
 %global with_xlib_lease 1
-%global with_teflon 1
 
 %global commit cbc1ec4f73483df36968dd54274f5f03a1b95851
 %global shortcommit cbc1ec4
@@ -132,11 +131,6 @@ BuildRequires:  pkgconfig(libva) >= 0.38.0
 BuildRequires:  pkgconfig(libelf)
 BuildRequires:  pkgconfig(libglvnd) >= 1.3.2
 BuildRequires:  llvm-devel >= 7.0.0
-%if 0%{?with_teflon}
-BuildRequires:  flatbuffers-devel
-BuildRequires:  flatbuffers-compiler
-BuildRequires:  xtensor-devel
-%endif
 %if 0%{?with_opencl} || 0%{?with_nvk} || 0%{?with_intel_clc}
 BuildRequires:  clang-devel
 BuildRequires:  pkgconfig(libclc)
@@ -287,14 +281,6 @@ Provides:       libgbm-devel%{?_isa}
 %description libgbm-devel
 %{summary}.
 
-%if 0%{?with_teflon}
-%package libTeflon
-Summary:        Mesa TensorFlow Lite delegate
-
-%description libTeflon
-%{summary}.
-%endif
-
 %if 0%{?with_opencl}
 %package libOpenCL
 Summary:        Mesa OpenCL runtime library
@@ -357,6 +343,7 @@ export MESON_PACKAGE_CACHE_DIR="%{cargo_registry}/"
   -Damdgpu-virtio=true \
   -Dgallium-vdpau=%{?with_vdpau:enabled}%{!?with_vdpau:disabled} \
   -Dgallium-va=%{?with_va:enabled}%{!?with_va:disabled} \
+  -Dgallium-xa=disabled \
 %if 0%{?with_opencl}
   -Dgallium-rusticl=true \
 %endif
@@ -454,11 +441,6 @@ popd
 %{_includedir}/gbm.h
 %{_includedir}/gbm_backend_abi.h
 %{_libdir}/pkgconfig/gbm.pc
-
-%if 0%{?with_teflon}
-%files libTeflon
-%{_libdir}/libteflon.so
-%endif
 
 %if 0%{?with_opencl}
 %files libOpenCL
