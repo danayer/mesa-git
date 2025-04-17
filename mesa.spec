@@ -58,8 +58,8 @@
 
 Name:           mesa
 Summary:        Mesa graphics libraries
-Version:        25.1.0
-Release: 0.288.git%{shortcommit}%{?dist}
+Version:        25.2.0
+Release: 0.1.git%{shortcommit}%{?dist}
 
 License:        MIT AND BSD-3-Clause AND SGI-B-2.0
 URL:            http://www.mesa3d.org
@@ -590,7 +590,6 @@ popd
 %{_bindir}/aubinator_viewer
 %{_bindir}/brw_asm
 %{_bindir}/brw_disasm
-%{_bindir}/computerator
 %{_bindir}/elk_asm
 %{_bindir}/elk_disasm
 %{_bindir}/intel_dev_info
