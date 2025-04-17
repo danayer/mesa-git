@@ -1,7 +1,7 @@
 %bcond_without videocodecs
 %global source_date_epoch_from_changelog 0
 
-%ifnarch s390x
+# Since we're only building for x86_64 and i386, we can simplify these conditionals
 %global with_hardware 1
 %global with_radeonsi 1
 %global with_vmware 1
@@ -11,45 +11,25 @@
 %if !0%{?rhel}
 %global with_r300 1
 %global with_r600 1
-%if 0%{?with_vulkan_hw}
 %global with_nvk %{with_vulkan_hw}
-%endif
 %global with_opencl 1
 %endif
 %global base_vulkan %{?with_vulkan_hw:,amd}%{!?with_vulkan_hw:%{nil}}
-%endif
 
-%ifnarch %{ix86}
-%if !0%{?rhel}
-%global with_teflon 1
-%endif
-%endif
-
-%ifarch %{ix86} x86_64
+# Intel-specific features (available on both x86_64 and i386)
 %global with_crocus 1
 %global with_i915   1
 %global with_iris   1
 %global with_intel_clc 1
 %global intel_platform_vulkan %{?with_vulkan_hw:,intel,intel_hasvk}%{!?with_vulkan_hw:%{nil}}
-%endif
+
+# Ray tracing only on x86_64
 %ifarch x86_64
 %global with_intel_vk_rt 1
 %endif
 
-%ifarch aarch64 x86_64 %{ix86}
-%global with_kmsro     1
-%if !0%{?rhel}
-%global with_lima      1
-%global with_vc4       1
-%global with_etnaviv   1
-%global with_tegra     1
-%global with_d3d12     1
-%endif
-%global with_freedreno 1
-%global with_panfrost  1
-%global with_v3d       1
-%global extra_platform_vulkan %{?with_vulkan_hw:,broadcom,freedreno,panfrost,imagination-experimental}%{!?with_vulkan_hw:%{nil}}
-%endif
+# No need for ARM-specific features like freedreno, panfrost, etc.
+%global with_d3d12 1
 
 %if !0%{?rhel}
 %global with_libunwind 1
@@ -62,7 +42,7 @@
 %bcond_with valgrind
 %endif
 
-%global vulkan_drivers swrast,virtio%{?base_vulkan}%{?intel_platform_vulkan}%{?extra_platform_vulkan}%{?with_nvk:,nouveau},microsoft-experimental
+%global vulkan_drivers swrast,virtio%{?base_vulkan}%{?intel_platform_vulkan}%{?with_nvk:,nouveau},microsoft-experimental
 
 ## additional functionality not in the fedora standard packages
 %global with_vulkan_overlay 1
@@ -365,17 +345,12 @@ export MESON_PACKAGE_CACHE_DIR="%{cargo_registry}/"
 
 %meson \
   -Dplatforms=x11,wayland \
-%if 0%{?with_hardware}
-  -Dgallium-drivers=softpipe,llvmpipe,virgl%{?with_d3d12:,d3d12},nouveau%{?with_r300:,r300}%{?with_crocus:,crocus}%{?with_i915:,i915}%{?with_iris:,iris}%{?with_vmware:,svga}%{?with_radeonsi:,radeonsi}%{?with_r600:,r600}%{?with_freedreno:,freedreno}%{?with_etnaviv:,etnaviv}%{?with_tegra:,tegra}%{?with_vc4:,vc4}%{?with_v3d:,v3d}%{?with_lima:,lima}%{?with_panfrost:,panfrost}%{?with_vulkan_hw:,zink} \
-%else
-  -Dgallium-drivers=softpipe,llvmpipe,virgl%{?with_d3d12:,d3d12} \
-%endif
+  -Dgallium-drivers=softpipe,llvmpipe,virgl%{?with_d3d12:,d3d12},nouveau%{?with_r300:,r300}%{?with_crocus:,crocus}%{?with_i915:,i915}%{?with_iris:,iris}%{?with_vmware:,svga}%{?with_radeonsi:,radeonsi}%{?with_r600:,r600}%{?with_vulkan_hw:,zink} \
   -Dgallium-d3d12-video=enabled \
   -Dgallium-d3d12-graphics=enabled \
   -Damdgpu-virtio=true \
   -Dgallium-vdpau=%{?with_vdpau:enabled}%{!?with_vdpau:disabled} \
   -Dgallium-va=%{?with_va:enabled}%{!?with_va:disabled} \
-  -Dteflon=%{?with_teflon:true}%{!?with_teflon:false} \
 %if 0%{?with_opencl}
   -Dgallium-rusticl=true \
 %endif
@@ -383,11 +358,11 @@ export MESON_PACKAGE_CACHE_DIR="%{cargo_registry}/"
   -Dvulkan-drivers=%{?vulkan_drivers} \
   -Dvulkan-layers=intel-nullhw,device-select%{?with_vulkan_overlay:,overlay} \
   -Dvulkan-beta=%{?with_vulkan_beta:true}%{!?with_vulkan_beta:false} \
-  -Dperfetto=disabled \
+  -Dperfetto=false \
   -Dgpuvis=%{?with_gpuvis:true}%{!?with_gpuvis:false} \
   -Dspirv-to-dxil=%{?with_spirv_to_dxil:true}%{!?with_spirv_to_dxil:false} \
 %if 0%{?with_mesa_tools}
-  -Dtools=drm-shim,etnaviv,freedreno,glsl,intel,nir,nouveau,lima,panfrost \
+  -Dtools=drm-shim,glsl,intel,nir,nouveau \
 %endif
   -Dxlib-lease=%{?with_xlib_lease:enabled}%{!?with_xlib_lease:disabled} \
   -Dgles1=enabled \
@@ -505,7 +480,6 @@ popd
 %{_libdir}/dri/d3d12_dri.so
 %endif
 
-%if 0%{?with_hardware}
 %if 0%{?with_r300}
 %{_libdir}/dri/r300_dri.so
 %endif
@@ -515,82 +489,16 @@ popd
 %endif
 %{_libdir}/dri/radeonsi_dri.so
 %endif
-%ifarch %{ix86} x86_64
 %{_libdir}/dri/crocus_dri.so
 %{_libdir}/dri/i915_dri.so
 %{_libdir}/dri/iris_dri.so
-%endif
-%ifarch aarch64 x86_64 %{ix86}
-%{_libdir}/dri/ingenic-drm_dri.so
-%{_libdir}/dri/imx-drm_dri.so
-%{_libdir}/dri/imx-lcdif_dri.so
-%{_libdir}/dri/kirin_dri.so
-%{_libdir}/dri/komeda_dri.so
-%{_libdir}/dri/mali-dp_dri.so
-%{_libdir}/dri/mcde_dri.so
-%{_libdir}/dri/mxsfb-drm_dri.so
-%{_libdir}/dri/rcar-du_dri.so
-%{_libdir}/dri/stm_dri.so
-%endif
-%if 0%{?with_vc4}
-%{_libdir}/dri/vc4_dri.so
-%endif
-%if 0%{?with_v3d}
-%{_libdir}/dri/v3d_dri.so
-%endif
-%if 0%{?with_freedreno}
-%{_libdir}/dri/kgsl_dri.so
-%{_libdir}/dri/msm_dri.so
-%endif
-%if 0%{?with_etnaviv}
-%{_libdir}/dri/etnaviv_dri.so
-%endif
-%if 0%{?with_tegra}
-%{_libdir}/dri/tegra_dri.so
-%endif
-%if 0%{?with_lima}
-%{_libdir}/dri/lima_dri.so
-%endif
-%if 0%{?with_panfrost}
-%{_libdir}/dri/panfrost_dri.so
-%{_libdir}/dri/panthor_dri.so
-%endif
 %{_libdir}/dri/nouveau_dri.so
 %if 0%{?with_vmware}
 %{_libdir}/dri/vmwgfx_dri.so
 %endif
-%endif
 %if 0%{?with_opencl}
 %dir %{_libdir}/gallium-pipe
 %{_libdir}/gallium-pipe/*.so
-%endif
-%if 0%{?with_kmsro}
-%{_libdir}/dri/armada-drm_dri.so
-%{_libdir}/dri/exynos_dri.so
-%{_libdir}/dri/gm12u320_dri.so
-%{_libdir}/dri/hdlcd_dri.so
-%{_libdir}/dri/hx8357d_dri.so
-%{_libdir}/dri/ili9163_dri.so
-%{_libdir}/dri/ili9225_dri.so
-%{_libdir}/dri/ili9341_dri.so
-%{_libdir}/dri/ili9486_dri.so
-%{_libdir}/dri/imx-dcss_dri.so
-%{_libdir}/dri/mediatek_dri.so
-%{_libdir}/dri/meson_dri.so
-%{_libdir}/dri/mi0283qt_dri.so
-%{_libdir}/dri/panel-mipi-dbi_dri.so
-%{_libdir}/dri/pl111_dri.so
-%{_libdir}/dri/repaper_dri.so
-%{_libdir}/dri/rockchip_dri.so
-%{_libdir}/dri/rzg2l-du_dri.so
-%{_libdir}/dri/ssd130x_dri.so
-%{_libdir}/dri/st7586_dri.so
-%{_libdir}/dri/st7735r_dri.so
-%{_libdir}/dri/sti_dri.so
-%{_libdir}/dri/sun4i-drm_dri.so
-%{_libdir}/dri/udl_dri.so
-%{_libdir}/dri/vkms_dri.so
-%{_libdir}/dri/zynqmp-dpsub_dri.so
 %endif
 %if 0%{?with_vulkan_hw}
 %{_libdir}/dri/zink_dri.so
@@ -652,23 +560,10 @@ popd
 %{_libdir}/libvulkan_nouveau.so
 %{_datadir}/vulkan/icd.d/nouveau_icd.*.json
 %endif
-%ifarch %{ix86} x86_64
 %{_libdir}/libvulkan_intel.so
 %{_datadir}/vulkan/icd.d/intel_icd.*.json
 %{_libdir}/libvulkan_intel_hasvk.so
 %{_datadir}/vulkan/icd.d/intel_hasvk_icd.*.json
-%endif
-%ifarch aarch64 x86_64 %{ix86}
-%{_libdir}/libvulkan_broadcom.so
-%{_datadir}/vulkan/icd.d/broadcom_icd.*.json
-%{_libdir}/libvulkan_freedreno.so
-%{_datadir}/vulkan/icd.d/freedreno_icd.*.json
-%{_libdir}/libvulkan_panfrost.so
-%{_datadir}/vulkan/icd.d/panfrost_icd.*.json
-%{_libdir}/libpowervr_rogue.so
-%{_libdir}/libvulkan_powervr_mesa.so
-%{_datadir}/vulkan/icd.d/powervr_mesa_icd.*.json
-%endif
 %endif
 
 %if 0%{?with_vulkan_overlay}
