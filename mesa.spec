@@ -412,18 +412,6 @@ rm -vf %{buildroot}%{_libdir}/libGLX_mesa.so
 rm -vf %{buildroot}%{_libdir}/libEGL_mesa.so
 # XXX can we just not build this
 rm -vf %{buildroot}%{_libdir}/libGLES*
-# We don't want libxatracker, since XA is deprecated and disabled
-rm -vf %{buildroot}%{_libdir}/libxatracker.so*
-rm -vf %{buildroot}%{_libdir}/pkgconfig/xatracker.pc
-rm -vf %{buildroot}%{_includedir}/xa_*.h
-rm -vf %{buildroot}%{_includedir}/xa_tracker.h
-
-# Remove all freedreno files - they're for ARM platforms
-rm -vf %{buildroot}%{_bindir}/afuc-asm
-rm -vf %{buildroot}%{_bindir}/afuc-disasm
-rm -vf %{buildroot}%{_bindir}/crashdec
-rm -vf %{buildroot}%{_libdir}/libfreedreno_noop_drm_shim.so
-rm -rf %{buildroot}%{_datadir}/freedreno/
 
 # glvnd needs a default provider for indirect rendering where it cannot
 # determine the vendor
@@ -589,6 +577,7 @@ popd
 %{_bindir}/glsl_compiler
 %{_bindir}/spirv2nir
 %{_bindir}/mesa-screenshot-control.py
+%{_bindir}/intel_measure.py
 
 # Intel tools
 %{_bindir}/aubinator
