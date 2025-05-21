@@ -148,6 +148,7 @@ BuildRequires:  (crate(paste) >= 1.0.14 with crate(paste) < 2)
 BuildRequires:  (crate(proc-macro2) >= 1.0.56 with crate(proc-macro2) < 2)
 BuildRequires:  (crate(quote) >= 1.0.25 with crate(quote) < 2)
 BuildRequires:  (crate(rustc-hash) >= 1.1.0 with crate(rustc-hash) < 2)
+BuildRequires:  rust-rustc-hash-devel
 BuildRequires:  (crate(syn/clone-impls) >= 2.0.15 with crate(syn/clone-impls) < 3)
 BuildRequires:  (crate(unicode-ident) >= 1.0.6 with crate(unicode-ident) < 2)
 %endif
@@ -339,6 +340,7 @@ export MESON_PACKAGE_CACHE_DIR="%{cargo_registry}/"
 %rewrite_wrap_file syn
 %rewrite_wrap_file unicode-ident
 %rewrite_wrap_file paste
+%rewrite_wrap_file rustc-hash
 %endif
 
 # We've gotten a report that enabling LTO for mesa breaks some games. See
