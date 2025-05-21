@@ -147,9 +147,9 @@ BuildRequires:  cbindgen
 BuildRequires:  (crate(paste) >= 1.0.14 with crate(paste) < 2)
 BuildRequires:  (crate(proc-macro2) >= 1.0.56 with crate(proc-macro2) < 2)
 BuildRequires:  (crate(quote) >= 1.0.25 with crate(quote) < 2)
-# Ensure we have a newer version of rustc-hash that includes FxBuildHasher
-BuildRequires:  (crate(rustc-hash) >= 1.1.5 with crate(rustc-hash) < 2)
-BuildRequires:  rust-rustc-hash-devel >= 1.1.5
+# Don't specify crate version for rustc-hash to avoid dependency resolution issues
+# Just use the system's rust-rustc-hash-devel package
+BuildRequires:  rust-rustc-hash-devel
 BuildRequires:  (crate(syn/clone-impls) >= 2.0.15 with crate(syn/clone-impls) < 3)
 BuildRequires:  (crate(unicode-ident) >= 1.0.6 with crate(unicode-ident) < 2)
 %endif
