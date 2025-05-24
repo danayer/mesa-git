@@ -357,7 +357,6 @@ export MESON_PACKAGE_CACHE_DIR="%{cargo_registry}/"
   -Damdgpu-virtio=true \
   -Dgallium-vdpau=%{?with_vdpau:enabled}%{!?with_vdpau:disabled} \
   -Dgallium-va=%{?with_va:enabled}%{!?with_va:disabled} \
-  -Dgallium-xa=disabled \
 %if 0%{?with_opencl}
   -Dgallium-rusticl=true \
 %endif
