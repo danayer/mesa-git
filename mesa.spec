@@ -59,7 +59,7 @@
 Name:           mesa
 Summary:        Mesa graphics libraries
 Version:        25.2.0
-Release: 0.142.git%{shortcommit}%{?dist}
+Release: 0.143.git%{shortcommit}%{?dist}
 
 License:        MIT AND BSD-3-Clause AND SGI-B-2.0
 URL:            http://www.mesa3d.org
@@ -360,7 +360,7 @@ export MESON_PACKAGE_CACHE_DIR="%{cargo_registry}/"
 %if 0%{?with_opencl}
   -Dgallium-rusticl=true \
 %endif
-  -Dgallium-mediafoundation=disabled \
+  -Dgallium-mediafoundation=enabled \
   -Dgallium-extra-hud=%{?with_gallium_extra_hud:true}%{!?with_gallium_extra_hud:false} \
   -Dvulkan-drivers=%{?vulkan_drivers} \
   -Dvulkan-layers=intel-nullhw,device-select,overlay,screenshot,vram-report-limit \
