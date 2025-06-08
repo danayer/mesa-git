@@ -42,7 +42,7 @@
 %bcond_with valgrind
 %endif
 
-%global vulkan_drivers swrast,virtio%{?base_vulkan}%{?intel_platform_vulkan}%{?with_nvk:,nouveau},microsoft-experimental%{!?ix86:,gfxstream}
+%global vulkan_drivers swrast,virtio%{?base_vulkan}%{?intel_platform_vulkan}%{?with_nvk:,nouveau},microsoft-experimental
 
 ## additional functionality not in the fedora standard packages
 %global with_vulkan_overlay 1
@@ -59,7 +59,7 @@
 Name:           mesa
 Summary:        Mesa graphics libraries
 Version:        25.2.0
-Release: 0.185.git%{shortcommit}%{?dist}
+Release: 0.183.git%{shortcommit}%{?dist}
 
 License:        MIT AND BSD-3-Clause AND SGI-B-2.0
 URL:            http://www.mesa3d.org
@@ -542,10 +542,6 @@ popd
 %{_datadir}/vulkan/explicit_layer.d/VkLayer_MESA_screenshot.json
 %{_libdir}/libVkLayer_MESA_vram_report_limit.so
 %{_datadir}/vulkan/explicit_layer.d/VkLayer_MESA_vram_report_limit.json
-%ifnarch %{ix86}
-%{_libdir}/libvulkan_gfxstream.so
-%{_datadir}/vulkan/icd.d/gfxstream_vk_icd.*.json
-%endif
 %if 0%{?with_d3d12}
 %{_bindir}/spirv2dxil
 %{_libdir}/libspirv_to_dxil.so
