@@ -77,13 +77,13 @@
 %global vendor_nvk_crates 1
 %endif
 
-%global commit 59fc5ae7c1b3d512c9fd4374aa8ee9081911c22b
-%global shortcommit 59fc5ae
+%global commit 5a84a6b775ba7cd855bd3ce019cf75b98859f527
+%global shortcommit 5a84a6b
 
 Name:           mesa
 Summary:        Mesa graphics libraries
 Version:        26.0.0
-Release: 0.304.git%{commit}%{?dist}
+Release: 0.305.git%{commit}%{?dist}
 
 License:        MIT AND BSD-3-Clause AND SGI-B-2.0
 URL:            http://www.mesa3d.org
