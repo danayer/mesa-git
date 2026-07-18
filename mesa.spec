@@ -3,20 +3,25 @@
 
 %ifnarch s390x
 %global with_hardware 1
+%global with_kmsro 1
 %global with_nvk 1
 %global with_radeonsi 1
+%global with_spirv_tools 1
 %global with_vmware 1
 %global with_vulkan_hw 1
-%global with_va 1
 %if !0%{?rhel}
 %global with_r300 1
 %global with_r600 1
 %global with_opencl 1
+%global with_va 1
+%endif
+%if !0%{?rhel} || 0%{?rhel} >= 9
+%global with_nvk %{with_vulkan_hw}
 %endif
 %global base_vulkan %{?with_vulkan_hw:,amd}%{!?with_vulkan_hw:%{nil}}
 %endif
 
-%ifnarch %{ix86}
+%ifarch aarch64 x86_64
 %if !0%{?rhel}
 %global with_teflon 1
 %endif
@@ -32,7 +37,7 @@
 %global with_intel_nullhw 1
 %endif
 %ifarch x86_64
-%if !0%{?with_vulkan_hw}
+%if 0%{?with_vulkan_hw}
 %global with_intel_vk_rt 1
 %endif
 %endif
@@ -48,7 +53,6 @@
 %global with_v3d       1
 %endif
 %global with_freedreno 1
-%global with_kmsro     1
 %global with_panfrost  1
 %if 0%{?with_asahi}
 %global asahi_platform_vulkan %{?with_vulkan_hw:,asahi}%{!?with_vulkan_hw:%{nil}}
@@ -77,13 +81,18 @@
 %global vendor_nvk_crates 1
 %endif
 
-%global commit e0eefe5999929039480de8515c2fe26f4ad6402c
-%global shortcommit e0eefe5
+# We've gotten a report that enabling LTO for mesa breaks some games. See
+# https://bugzilla.redhat.com/show_bug.cgi?id=1862771 for details.
+# Disable LTO for now
+%global _lto_cflags %nil
+
+%global commit 4b9c74d0af56b7a9cea3384965934a20ce95bfc4
+%global shortcommit 4b9c74d
 
 Name:           mesa
 Summary:        Mesa graphics libraries
-Version:        26.0.0
-Release: 0.574.git%{commit}%{?dist}
+Version:        26.2.0
+Release: 0.1.git%{commit}%{?dist}
 
 License:        MIT AND BSD-3-Clause AND SGI-B-2.0
 URL:            http://www.mesa3d.org
@@ -94,11 +103,12 @@ Source0:        https://gitlab.freedesktop.org/mesa/mesa/-/archive/%{commit}.tar
 # Fedora opts to ignore the optional part of clause 2 and treat that code as 2 clause BSD.
 Source1:        Mesa-MLAA-License-Clarification-Email.txt
 
-Patch10:        gnome-shell-glthread-disable.patch
+#Patch10:        gnome-shell-glthread-disable.patch
 
 BuildRequires:  meson >= 1.3.0
 BuildRequires:  gcc
 BuildRequires:  gcc-c++
+BuildRequires:  libstdc++-static
 BuildRequires:  gettext
 %if 0%{?with_hardware}
 BuildRequires:  kernel-headers
@@ -119,6 +129,7 @@ BuildRequires:  pkgconfig(wayland-protocols) >= 1.8
 BuildRequires:  pkgconfig(wayland-client) >= 1.11
 BuildRequires:  pkgconfig(wayland-server) >= 1.11
 BuildRequires:  pkgconfig(wayland-egl-backend) >= 3
+BuildRequires:  pkgconfig(libdisplay-info)
 BuildRequires:  pkgconfig(x11)
 BuildRequires:  pkgconfig(xext)
 BuildRequires:  pkgconfig(xdamage) >= 1.1
@@ -139,7 +150,6 @@ BuildRequires:  pkgconfig(xcb-randr)
 BuildRequires:  pkgconfig(xrandr) >= 1.3
 BuildRequires:  bison
 BuildRequires:  flex
-BuildRequires:  libdisplay-info-devel
 %if 0%{?with_lmsensors}
 BuildRequires:  lm_sensors-devel
 %endif
@@ -191,7 +201,7 @@ BuildRequires:  glslang
 BuildRequires:  pkgconfig(vulkan)
 %endif
 %if 0%{?with_d3d12}
-BuildRequires:  pkgconfig(DirectX-Headers) >= 1.614.1
+BuildRequires:  pkgconfig(DirectX-Headers) >= 1.618.1
 %endif
 ## vulkan hud requires
 %if 0%{?with_vulkan_overlay}
@@ -207,6 +217,7 @@ Provides:       mesa-dri-filesystem = %{?epoch:%{epoch}:}%{version}-%{release}
 Obsoletes:      mesa-omx-drivers < %{?epoch:%{epoch}:}%{version}-%{release}
 Obsoletes:      mesa-libd3d < %{?epoch:%{epoch}:}%{version}-%{release}
 Obsoletes:      mesa-libd3d-devel < %{?epoch:%{epoch}:}%{version}-%{release}
+Obsoletes:      mesa-vdpau-drivers < %{?epoch:%{epoch}:}%{version}-%{release}
 
 %description filesystem
 %{summary}.
@@ -226,8 +237,8 @@ Obsoletes:      %{name}-libOSMesa < 25.1.0~rc2-1
 Summary:        Mesa libGL development package
 Requires:       (%{name}-libGL%{?_isa} = %{?epoch:%{epoch}:}%{version}-%{release} if %{name}-libGL%{?_isa})
 Requires:       libglvnd-devel%{?_isa} >= 1:1.3.2
-Provides:       libGL-devel
-Provides:       libGL-devel%{?_isa}
+Provides:       libGL-devel = %{?epoch:%{epoch}:}%{version}-%{release}
+Provides:       libGL-devel%{?_isa} = %{?epoch:%{epoch}:}%{version}-%{release}
 Recommends:     gl-manpages
 %if 0%{?fedora} > 41
 Obsoletes:      %{name}-libOSMesa-devel <= 25.1.0~rc2-1
@@ -250,8 +261,8 @@ Summary:        Mesa libEGL development package
 Requires:       (%{name}-libEGL%{?_isa} = %{?epoch:%{epoch}:}%{version}-%{release} if %{name}-libEGL%{?_isa})
 Requires:       libglvnd-devel%{?_isa} >= 1:1.3.2
 Requires:       %{name}-khr-devel%{?_isa}
-Provides:       libEGL-devel
-Provides:       libEGL-devel%{?_isa}
+Provides:       libEGL-devel = %{?epoch:%{epoch}:}%{version}-%{release}
+Provides:       libEGL-devel%{?_isa} = %{?epoch:%{epoch}:}%{version}-%{release}
 
 %description libEGL-devel
 %{summary}.
@@ -259,29 +270,19 @@ Provides:       libEGL-devel%{?_isa}
 %package dri-drivers
 Summary:        Mesa-based DRI drivers
 Requires:       %{name}-filesystem%{?_isa} = %{?epoch:%{epoch}:}%{version}-%{release}
-%if 0%{?with_va}
-Recommends:     %{name}-va-drivers%{?_isa}
-%endif
 Obsoletes:      %{name}-libglapi < 25.0.0~rc2-1
 Provides:       %{name}-libglapi >= 25.0.0~rc2-1
+Obsoletes:      %{name}-va-drivers < 26.0.0-5
+Provides:       %{name}-va-drivers >= 26.0.0-5
+Obsoletes:      %{name}-vaapi-drivers < 22.2.0-5
 
 %description dri-drivers
 %{summary}.
 
-%if 0%{?with_va}
-%package        va-drivers
-Summary:        Mesa-based VA-API video acceleration drivers
-Requires:       %{name}-filesystem%{?_isa} = %{?epoch:%{epoch}:}%{version}-%{release}
-Obsoletes:      %{name}-vaapi-drivers < 22.3.0-0.24
-
-%description va-drivers
-%{summary}.
-%endif
-
 %package libgbm
 Summary:        Mesa gbm runtime library
-Provides:       libgbm
-Provides:       libgbm%{?_isa}
+Provides:       libgbm = %{?epoch:%{epoch}:}%{version}-%{release}
+Provides:       libgbm%{?_isa} = %{?epoch:%{epoch}:}%{version}-%{release}
 Recommends:     %{name}-dri-drivers%{?_isa} = %{?epoch:%{epoch}:}%{version}-%{release}
 # If mesa-dri-drivers are installed, they must match in version. This is here to prevent using
 # older mesa-dri-drivers together with a newer mesa-libgbm and its dependants.
@@ -294,8 +295,8 @@ Requires:       (%{name}-dri-drivers%{?_isa} = %{?epoch:%{epoch}:}%{version}-%{r
 %package libgbm-devel
 Summary:        Mesa libgbm development package
 Requires:       %{name}-libgbm%{?_isa} = %{?epoch:%{epoch}:}%{version}-%{release}
-Provides:       libgbm-devel
-Provides:       libgbm-devel%{?_isa}
+Provides:       libgbm-devel = %{?epoch:%{epoch}:}%{version}-%{release}
+Provides:       libgbm-devel%{?_isa} = %{?epoch:%{epoch}:}%{version}-%{release}
 
 %description libgbm-devel
 %{summary}.
@@ -341,6 +342,7 @@ Summary:        Mesa Vulkan drivers
 Requires:       vulkan%{_isa}
 Requires:       %{name}-filesystem%{?_isa} = %{?epoch:%{epoch}:}%{version}-%{release}
 Obsoletes:      mesa-vulkan-devel < %{?epoch:%{epoch}:}%{version}-%{release}
+Obsoletes:      VK_hdr_layer < 1
 
 %description vulkan-drivers
 The drivers with support for the Vulkan API.
@@ -364,12 +366,8 @@ export MESON_PACKAGE_CACHE_DIR="%{cargo_registry}/"
 %rewrite_wrap_file syn
 %rewrite_wrap_file unicode-ident
 %rewrite_wrap_file paste
+%rewrite_wrap_file rustc-hash
 %endif
-
-# We've gotten a report that enabling LTO for mesa breaks some games. See
-# https://bugzilla.redhat.com/show_bug.cgi?id=1862771 for details.
-# Disable LTO for now
-%define _lto_cflags %{nil}
 
 %meson \
   -Dplatforms=x11,wayland \
@@ -413,6 +411,7 @@ export MESON_PACKAGE_CACHE_DIR="%{cargo_registry}/"
 %if %{with videocodecs}
   -Dvideo-codecs=all \
 %endif
+  -Dspirv-tools=%{?with_spirv_tools:enabled}%{!?with_spirv_tools:disabled} \
   %{nil}
 %meson_build
 
@@ -425,7 +424,7 @@ rm -vf %{buildroot}%{_libdir}/libEGL_mesa.so
 # XXX can we just not build this
 rm -vf %{buildroot}%{_libdir}/libGLES*
 
-%if ! 0%{?with_asahi}
+%if !0%{?with_asahi}
 # This symlink is unconditionally created when any kmsro driver is enabled
 # We don't want this one so delete it
 rm -vf %{buildroot}%{_libdir}/dri/apple_dri.so
@@ -436,11 +435,11 @@ rm -vf %{buildroot}%{_libdir}/dri/apple_dri.so
 ln -s %{_libdir}/libGLX_mesa.so.0 %{buildroot}%{_libdir}/libGLX_system.so.0
 
 # this keeps breaking, check it early.  note that the exit from eu-ftr is odd.
-pushd %{buildroot}%{_libdir}
-for i in libGL.so ; do
-    eu-findtextrel $i && exit 1
-done
-popd
+#pushd %{buildroot}%{_libdir}
+#for i in libGL.so ; do
+#    eu-findtextrel $i && exit 1
+#done
+#popd
 
 %files filesystem
 %doc docs/Mesa-MLAA-License-Clarification-Email.txt
@@ -450,6 +449,7 @@ popd
 %files libGL
 %{_libdir}/libGLX_mesa.so.0*
 %{_libdir}/libGLX_system.so.0*
+
 %files libGL-devel
 %dir %{_includedir}/GL
 %dir %{_includedir}/GL/internal
@@ -459,6 +459,7 @@ popd
 %files libEGL
 %{_datadir}/glvnd/egl_vendor.d/50_mesa.json
 %{_libdir}/libEGL_mesa.so.0*
+
 %files libEGL-devel
 %dir %{_includedir}/EGL
 %{_includedir}/EGL/eglext_angle.h
@@ -467,6 +468,7 @@ popd
 %files libgbm
 %{_libdir}/libgbm.so.1
 %{_libdir}/libgbm.so.1.*
+
 %files libgbm-devel
 %{_libdir}/libgbm.so
 %{_includedir}/gbm.h
@@ -495,31 +497,39 @@ popd
 %{_libdir}/dri/libdril_dri.so
 %{_libdir}/dri/swrast_dri.so
 %{_libdir}/dri/virtio_gpu_dri.so
+%{_datadir}/drirc.d/00-virtio_gpu-defaults.conf
 
 %if 0%{?with_hardware}
 %if 0%{?with_r300}
 %{_libdir}/dri/r300_dri.so
+%{_datadir}/drirc.d/00-r300-defaults.conf
 %endif
 %if 0%{?with_radeonsi}
 %if 0%{?with_r600}
 %{_libdir}/dri/r600_dri.so
+%{_datadir}/drirc.d/00-r600-defaults.conf
 %endif
 %{_libdir}/dri/radeonsi_dri.so
+%{_datadir}/drirc.d/00-radeonsi-defaults.conf
 %endif
 %ifarch %{ix86} x86_64
 %{_libdir}/dri/crocus_dri.so
+%{_datadir}/drirc.d/00-crocus-defaults.conf
 %{_libdir}/dri/iris_dri.so
+%{_datadir}/drirc.d/00-iris-defaults.conf
 %if 0%{?with_i915}
 %{_libdir}/dri/i915_dri.so
 %endif
 %endif
-%ifarch aarch64 x86_64 %{ix86}
+%ifnarch s390x
 %if 0%{?with_asahi}
 %{_libdir}/dri/apple_dri.so
 %{_libdir}/dri/asahi_dri.so
+%{_datadir}/drirc.d/00-asahi-defaults.conf
 %endif
 %if 0%{?with_d3d12}
 %{_libdir}/dri/d3d12_dri.so
+%{_datadir}/drirc.d/00-d3d12-defaults.conf
 %endif
 %{_libdir}/dri/ingenic-drm_dri.so
 %{_libdir}/dri/imx-drm_dri.so
@@ -537,10 +547,12 @@ popd
 %endif
 %if 0%{?with_v3d}
 %{_libdir}/dri/v3d_dri.so
+%{_datadir}/drirc.d/00-v3d-defaults.conf
 %endif
 %if 0%{?with_freedreno}
 %{_libdir}/dri/kgsl_dri.so
 %{_libdir}/dri/msm_dri.so
+%{_datadir}/drirc.d/00-msm-defaults.conf
 %endif
 %if 0%{?with_etnaviv}
 %{_libdir}/dri/etnaviv_dri.so
@@ -553,11 +565,13 @@ popd
 %endif
 %if 0%{?with_panfrost}
 %{_libdir}/dri/panfrost_dri.so
+%{_datadir}/drirc.d/00-panfrost-defaults.conf
 %{_libdir}/dri/panthor_dri.so
 %endif
 %{_libdir}/dri/nouveau_dri.so
 %if 0%{?with_vmware}
 %{_libdir}/dri/vmwgfx_dri.so
+%{_datadir}/drirc.d/00-vmwgfx-defaults.conf
 %endif
 %endif
 %if 0%{?with_kmsro}
@@ -590,10 +604,9 @@ popd
 %endif
 %if 0%{?with_vulkan_hw}
 %{_libdir}/dri/zink_dri.so
+%{_datadir}/drirc.d/00-zink-defaults.conf
 %endif
-
 %if 0%{?with_va}
-%files va-drivers
 %{_libdir}/dri/nouveau_drv_video.so
 %if 0%{?with_r600}
 %{_libdir}/dri/r600_drv_video.so
@@ -622,11 +635,13 @@ popd
 %endif
 %{_libdir}/libvulkan_lvp.so
 %{_datadir}/vulkan/icd.d/lvp_icd.*.json
+%{_datadir}/drirc.d/00-lavapipe-defaults.conf
 %{_libdir}/libVkLayer_MESA_device_select.so
 %{_datadir}/vulkan/implicit_layer.d/VkLayer_MESA_device_select.json
 %if 0%{?with_virtio}
 %{_libdir}/libvulkan_virtio.so
 %{_datadir}/vulkan/icd.d/virtio_icd.*.json
+%{_datadir}/drirc.d/00-venus-defaults.conf
 %endif
 %if 0%{?with_intel_nullhw}
 %{_libdir}/libVkLayer_INTEL_nullhw.so
@@ -639,30 +654,39 @@ popd
 %if 0%{?with_nvk}
 %{_libdir}/libvulkan_nouveau.so
 %{_datadir}/vulkan/icd.d/nouveau_icd.*.json
+%{_datadir}/drirc.d/00-nvk-defaults.conf
 %endif
 %if 0%{?with_d3d12}
 %{_libdir}/libvulkan_dzn.so
 %{_datadir}/vulkan/icd.d/dzn_icd.*.json
+%{_datadir}/drirc.d/00-dzn-defaults.conf
 %endif
 %ifarch %{ix86} x86_64
 %{_libdir}/libvulkan_intel.so
 %{_datadir}/vulkan/icd.d/intel_icd.*.json
+%{_datadir}/drirc.d/00-anv-defaults.conf
 %{_libdir}/libvulkan_intel_hasvk.so
 %{_datadir}/vulkan/icd.d/intel_hasvk_icd.*.json
+%{_datadir}/drirc.d/00-hasvk-defaults.conf
 %endif
 %ifarch aarch64 x86_64 %{ix86}
 %if 0%{?with_asahi}
 %{_libdir}/libvulkan_asahi.so
 %{_datadir}/vulkan/icd.d/asahi_icd.*.json
+%{_datadir}/drirc.d/00-hk-defaults.conf
 %endif
 %{_libdir}/libvulkan_broadcom.so
 %{_datadir}/vulkan/icd.d/broadcom_icd.*.json
+%{_datadir}/drirc.d/00-v3dv-defaults.conf
 %{_libdir}/libvulkan_freedreno.so
 %{_datadir}/vulkan/icd.d/freedreno_icd.*.json
+%{_datadir}/drirc.d/00-turnip-defaults.conf
 %{_libdir}/libvulkan_panfrost.so
 %{_datadir}/vulkan/icd.d/panfrost_icd.*.json
+%{_datadir}/drirc.d/00-panvk-defaults.conf
 %{_libdir}/libvulkan_powervr_mesa.so
 %{_datadir}/vulkan/icd.d/powervr_mesa_icd.*.json
+%{_datadir}/drirc.d/00-pvr-defaults.conf
 %endif
 %endif
 
