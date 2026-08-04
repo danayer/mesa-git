@@ -196,6 +196,7 @@ BuildRequires:  python3-ply
 BuildRequires:  python3-pycparser
 BuildRequires:  python3-pyyaml
 BuildRequires:  vulkan-headers
+BuildRequires:  pkgconfig(venus-protocol)
 BuildRequires:  glslang
 %if 0%{?with_vulkan_hw}
 BuildRequires:  pkgconfig(vulkan)
