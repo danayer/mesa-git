@@ -208,6 +208,9 @@ BuildRequires:  glslang
 %if 0%{?with_vulkan_hw}
 BuildRequires:  pkgconfig(vulkan)
 %endif
+%if 0%{?with_virtio}
+BuildRequires:  pkgconfig(venus-protocol)
+%endif
 %if 0%{?with_d3d12}
 BuildRequires:  pkgconfig(DirectX-Headers) >= 1.619.1
 %endif
