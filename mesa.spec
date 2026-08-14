@@ -208,7 +208,7 @@ BuildRequires:  glslang
 %if 0%{?with_vulkan_hw}
 BuildRequires:  pkgconfig(vulkan)
 %endif
-%if 0%{?with_virtio}
+%if 0%{?with_virtio} && 0%{?fedora} > 44
 BuildRequires:  pkgconfig(venus-protocol)
 %endif
 %if 0%{?with_d3d12}
