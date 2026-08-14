@@ -61,7 +61,9 @@
 %if !0%{?rhel}
 %global with_libunwind 1
 %global with_lmsensors 1
+%if 0%{?fedora} > 44
 %global with_virtio    1
+%endif
 %endif
 
 %ifarch %{valgrind_arches}
