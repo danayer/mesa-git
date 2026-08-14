@@ -165,6 +165,9 @@ BuildRequires:  lm_sensors-devel
 %if 0%{?with_va}
 BuildRequires:  pkgconfig(libva) >= 0.38.0
 %endif
+%if %{with videocodecs}
+BuildRequires:  pkgconfig(vdpau)
+%endif
 BuildRequires:  pkgconfig(libelf)
 BuildRequires:  pkgconfig(libglvnd) >= 1.3.2
 BuildRequires:  llvm-devel >= 7.0.0
@@ -346,7 +349,7 @@ Obsoletes:      VK_hdr_layer < 1
 The drivers with support for the Vulkan API.
 
 %prep
-%autosetup -n %{name}-%{ver} -p1
+%autosetup -n %{name}-%{commit} -p1
 cp %{SOURCE1} docs/
 
 # Extract Rust crates meson cache directory
@@ -367,7 +370,7 @@ done
 cat > Cargo.toml <<_EOF
 [package]
 name = "mesa"
-version = "%{ver}"
+version = "%{version}"
 edition = "2021"
 
 [lib]
@@ -438,6 +441,10 @@ rewrite_wrap_file rustc-hash
   -Dgallium-drivers=llvmpipe,virgl \
 %endif
   -Dgallium-va=%{?with_va:enabled}%{!?with_va:disabled} \
+  -Dgallium-vdpau=%{?with_videocodecs:enabled}%{!?with_videocodecs:disabled} \
+%if %{with videocodecs}
+  -Dvideo-codecs=all \
+%endif
   -Dgallium-mediafoundation=disabled \
   -Dteflon=%{?with_teflon:true}%{!?with_teflon:false} \
 %if 0%{?with_opencl}
