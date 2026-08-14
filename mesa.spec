@@ -441,7 +441,6 @@ rewrite_wrap_file rustc-hash
   -Dgallium-drivers=llvmpipe,virgl \
 %endif
   -Dgallium-va=%{?with_va:enabled}%{!?with_va:disabled} \
-  -Dgallium-vdpau=%{?with_videocodecs:enabled}%{!?with_videocodecs:disabled} \
 %if %{with videocodecs}
   -Dvideo-codecs=all \
 %endif
