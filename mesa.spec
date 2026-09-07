@@ -83,13 +83,13 @@
 # Disable LTO for now
 %global _lto_cflags %nil
 
-%global commit ea85c4c2db3dcb6a9022081ef07ebdbbcb744a64
-%global shortcommit ea85c4c
+%global commit 59d36fa82bd331ca456411a7cecbc5cb73b493b8
+%global shortcommit 59d36fa
 
 Name:           mesa
 Summary:        Mesa graphics libraries
 Version:        26.3.0
-Release: 0.171.git%{commit}%{?dist}
+Release: 0.172.git%{commit}%{?dist}
 
 License:        MIT AND BSD-3-Clause AND SGI-B-2.0
 URL:            http://www.mesa3d.org
